@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_repository.dart';
 import '../models/auth.dart';
+import 'invoice_provider.dart';
+import 'company_provider.dart';
+import 'client_provider.dart';
+import 'bank_account_provider.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
@@ -36,8 +40,9 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _repository;
+  final Ref _ref;
 
-  AuthNotifier(this._repository) : super(const AuthState()) {
+  AuthNotifier(this._repository, this._ref) : super(const AuthState()) {
     _checkStoredAuth();
   }
 
@@ -59,6 +64,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     try {
       final response = await _repository.login(email, password);
+
+      // Invalidate all data providers so they refetch with valid token
+      _invalidateDataProviders();
+
       state = AuthState(
         status: AuthStatus.authenticated,
         user: response.user,
@@ -75,7 +84,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repository.logout();
+    _invalidateDataProviders();
     state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  void _invalidateDataProviders() {
+    _ref.invalidate(invoiceListProvider);
+    _ref.invalidate(invoiceDetailProvider);
+    _ref.invalidate(companyListProvider);
+    _ref.invalidate(companyDetailProvider);
+    _ref.invalidate(clientListProvider);
+    _ref.invalidate(clientDetailProvider);
+    _ref.invalidate(bankAccountListProvider);
   }
 
   String _extractError(DioException e) {
@@ -97,5 +117,5 @@ class AuthNotifier extends StateNotifier<AuthState> {
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.watch(authRepositoryProvider));
+  return AuthNotifier(ref.watch(authRepositoryProvider), ref);
 });

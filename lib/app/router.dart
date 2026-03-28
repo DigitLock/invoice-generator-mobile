@@ -13,21 +13,26 @@ import '../screens/client_form_screen.dart';
 import '../screens/company_detail_screen.dart';
 import '../widgets/shell_scaffold.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
-final _shellNavigatorKey = GlobalKey<NavigatorState>();
-
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final notifier = _AuthChangeNotifier(ref);
+  ref.onDispose(notifier.dispose);
 
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
-    refreshListenable: _AuthRefreshListenable(ref),
+    refreshListenable: notifier,
     redirect: (context, state) {
+      final authState = ref.read(authProvider);
       final isAuth = authState.status == AuthStatus.authenticated;
       final isLoggingIn = state.uri.path == '/login';
+      final isSplash = state.uri.path == '/splash';
 
-      if (authState.status == AuthStatus.unknown) return null;
+      // While checking stored auth, stay on splash
+      if (authState.status == AuthStatus.unknown) {
+        return isSplash ? null : '/splash';
+      }
+
+      // Splash done — redirect based on auth
+      if (isSplash) return isAuth ? '/' : '/login';
 
       if (!isAuth && !isLoggingIn) return '/login';
       if (isAuth && isLoggingIn) return '/';
@@ -36,11 +41,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
+        path: '/splash',
+        builder: (context, state) => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+      GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
       ),
       ShellRoute(
-        navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) => ShellScaffold(child: child),
         routes: [
           GoRoute(
@@ -93,10 +103,18 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _AuthRefreshListenable extends ChangeNotifier {
-  _AuthRefreshListenable(Ref ref) {
-    ref.listen(authProvider, (_, __) {
+class _AuthChangeNotifier extends ChangeNotifier {
+  late final Function _removeListener;
+
+  _AuthChangeNotifier(Ref ref) {
+    _removeListener = ref.listen(authProvider, (_, __) {
       notifyListeners();
-    });
+    }).close;
+  }
+
+  @override
+  void dispose() {
+    _removeListener();
+    super.dispose();
   }
 }
