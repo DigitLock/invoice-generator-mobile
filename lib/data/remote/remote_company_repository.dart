@@ -21,4 +21,12 @@ class RemoteCompanyRepository implements CompanyRepository {
     final response = await _dio.get('/companies/$id');
     return Company.fromJson(response.data as Map<String, dynamic>);
   }
+
+  @override
+  Future<Company> create(Map<String, dynamic> data) =>
+      throw UnimplementedError('Company creation is read-only in online mode');
+
+  @override
+  Future<Company> update(int id, Map<String, dynamic> data) =>
+      throw UnimplementedError('Company editing is read-only in online mode');
 }

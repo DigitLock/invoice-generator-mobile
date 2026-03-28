@@ -13,6 +13,8 @@ import '../screens/invoice_form_screen.dart';
 import '../screens/client_list_screen.dart';
 import '../screens/client_form_screen.dart';
 import '../screens/company_detail_screen.dart';
+import '../screens/company_form_screen.dart';
+import '../screens/bank_account_form_screen.dart';
 import '../screens/settings_screen.dart';
 import '../widgets/shell_scaffold.dart';
 
@@ -134,6 +136,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/clients/:id/edit',
         builder: (context, state) => ClientFormScreen(
           clientId: state.pathParameters['id'],
+        ),
+      ),
+      GoRoute(
+        path: '/company/new',
+        builder: (context, state) => const CompanyFormScreen(),
+      ),
+      GoRoute(
+        path: '/company/:id/edit',
+        builder: (context, state) => CompanyFormScreen(
+          companyId: state.pathParameters['id'],
+        ),
+      ),
+      GoRoute(
+        path: '/company/:id/bank-accounts/new',
+        builder: (context, state) => BankAccountFormScreen(
+          companyId: int.parse(state.pathParameters['id']!),
         ),
       ),
     ],

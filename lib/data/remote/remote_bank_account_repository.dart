@@ -15,4 +15,8 @@ class RemoteBankAccountRepository implements BankAccountRepository {
         .map((e) => BankAccount.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  @override
+  Future<BankAccount> create(int companyId, Map<String, dynamic> data) =>
+      throw UnimplementedError('Bank account creation is read-only in online mode');
 }

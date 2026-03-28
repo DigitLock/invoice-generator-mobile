@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../models/company.dart';
 import '../models/bank_account.dart';
@@ -23,7 +24,9 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = ref.watch(appModeProvider) == AppMode.online;
+    final isOffline = ref.watch(appModeProvider) == AppMode.offline;
+    final isOnline = !isOffline;
+
     if (isOnline) {
       final authState = ref.watch(authProvider);
       if (authState.status != AuthStatus.authenticated) {
@@ -48,23 +51,32 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
                 padding: const EdgeInsets.all(32),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.business_outlined, size: 64, color: Color(0xFF9CA3AF)),
-                    SizedBox(height: 16),
+                  children: [
+                    const Icon(Icons.business_outlined,
+                        size: 64, color: Color(0xFF9CA3AF)),
+                    const SizedBox(height: 16),
                     Text(
-                      'No companies yet.\nCreate one via the web dashboard.',
+                      isOffline
+                          ? 'No companies yet'
+                          : 'No companies yet.\nCreate one via the web dashboard.',
                       textAlign: TextAlign.center,
                     ),
+                    if (isOffline) ...[
+                      const SizedBox(height: 16),
+                      FilledButton.tonal(
+                        onPressed: () => context.push('/company/new'),
+                        child: const Text('Create Company'),
+                      ),
+                    ],
                   ],
                 ),
               ),
             );
           }
 
-          // Auto-select first company
           final selectedId = _selectedCompanyId ?? list.first.id;
-          final company =
-              list.firstWhere((c) => c.id == selectedId, orElse: () => list.first);
+          final company = list.firstWhere((c) => c.id == selectedId,
+              orElse: () => list.first);
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -73,7 +85,6 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
             },
             child: ListView(
               children: [
-                // Company selector (if multiple)
                 if (list.length > 1)
                   Padding(
                     padding:
@@ -91,14 +102,30 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
                     ),
                   ),
 
-                _CompanyInfoCard(company: company),
+                _CompanyInfoCard(
+                  company: company,
+                  showEdit: isOffline,
+                ),
 
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                  child: Text(
-                    'Bank Accounts',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Bank Accounts',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (isOffline)
+                        TextButton.icon(
+                          onPressed: () => context
+                              .push('/company/${company.id}/bank-accounts/new'),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add'),
+                        ),
+                    ],
                   ),
                 ),
 
@@ -108,14 +135,21 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
           );
         },
       ),
+      floatingActionButton: (ref.watch(appModeProvider) == AppMode.offline)
+          ? FloatingActionButton(
+              onPressed: () => context.push('/company/new'),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }
 
 class _CompanyInfoCard extends StatelessWidget {
-  const _CompanyInfoCard({required this.company});
+  const _CompanyInfoCard({required this.company, this.showEdit = false});
 
   final Company company;
+  final bool showEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -128,10 +162,22 @@ class _CompanyInfoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(company.name,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(company.name,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                ),
+                if (showEdit)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    onPressed: () =>
+                        context.push('/company/${company.id}/edit'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
             _Row('Contact', company.contactPerson),
             _Row('Address', company.address),
             if (company.phone != null) _Row('Phone', company.phone!),
@@ -196,8 +242,9 @@ class _BankAccountsList extends ConsumerWidget {
           );
         }
         return Column(
-          children:
-              list.map((account) => _BankAccountCard(account: account)).toList(),
+          children: list
+              .map((account) => _BankAccountCard(account: account))
+              .toList(),
         );
       },
     );
