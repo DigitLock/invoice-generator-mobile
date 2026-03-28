@@ -12,11 +12,13 @@ void main() {
   );
 }
 
-class InvoiceGeneratorApp extends StatelessWidget {
+class InvoiceGeneratorApp extends ConsumerWidget {
   const InvoiceGeneratorApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
     return MaterialApp.router(
       title: 'Invoice Generator',
       theme: AppTheme.lightTheme,
