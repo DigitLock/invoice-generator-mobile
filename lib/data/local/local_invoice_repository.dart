@@ -6,6 +6,7 @@ import '../../models/company.dart';
 import '../../models/client.dart';
 import '../../models/bank_account.dart';
 import '../../models/pagination.dart';
+import '../../services/local_pdf_service.dart';
 import '../repositories/invoice_repository.dart';
 
 const _allowedTransitions = {
@@ -16,8 +17,11 @@ const _allowedTransitions = {
 
 class LocalInvoiceRepository implements InvoiceRepository {
   final Database _db;
+  final LocalPdfService _pdfService;
 
-  LocalInvoiceRepository({required Database db}) : _db = db;
+  LocalInvoiceRepository({required Database db, required LocalPdfService pdfService})
+      : _db = db,
+        _pdfService = pdfService;
 
   @override
   Future<PaginatedResponse<InvoiceListItem>> list({
@@ -291,8 +295,10 @@ class LocalInvoiceRepository implements InvoiceRepository {
   }
 
   @override
-  Future<String> downloadPdf(int id) =>
-      throw UnimplementedError('PDF generation coming in Stage 4.11');
+  Future<String> downloadPdf(int id) async {
+    final invoice = await getById(id);
+    return _pdfService.generatePdf(invoice);
+  }
 
   Future<String> _generateNumber(String issueDate) async {
     final date = DateTime.tryParse(issueDate) ?? DateTime.now();
