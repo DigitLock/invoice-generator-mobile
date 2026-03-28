@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Flutter mobile app (iOS & Android) for Invoice Generator — companion to the web dashboard. Consumes the same REST API (`/api/v1/`). Auth-only (no guest mode), JWT shared with Expense Tracker. Full SRS is in `Documentation/invoice-generator-mobile-srs.md`.
+Flutter mobile app (iOS & Android) for Invoice Generator. Two modes: **offline** (local SQLite, no server) and **online** (REST API + JWT auth via Expense Tracker). Mode chosen on Welcome Screen, stored in SharedPreferences. Full SRS is in `Documentation/invoice-generator-mobile-srs.md`.
 
 ## Build & Run Commands
 
@@ -25,7 +25,7 @@ flutter analyze                                          # Static analysis
 - **`lib/screens/`** — One file per screen. Screens are thin: they read providers and render widgets.
 - **`lib/widgets/`** — Reusable UI components. `shell_scaffold.dart` is the bottom tab bar wrapper used by ShellRoute.
 - **`lib/providers/`** — Riverpod providers (state layer). Each domain entity gets its own provider file.
-- **`lib/data/`** — Repository classes that call the API via Dio. JWT interceptor handles auth header injection and 401→logout.
+- **`lib/data/`** — Repository pattern: abstract interfaces in `repositories/`, remote (Dio) implementations in `remote/`, local (SQLite) implementations in `local/` (planned). Providers switch between remote/local based on `appModeProvider`.
 - **`lib/models/`** — Dart data classes matching API JSON responses.
 - **`lib/services/`** — Platform services (ads, storage wrappers).
 
@@ -38,7 +38,8 @@ flutter analyze                                          # Static analysis
 - **Bundle ID**: `systems.digitlock.invoicegenerator` (both platforms).
 - **Minimum OS**: iOS 15.0, Android API 26.
 - **Monetization packages** (`google_mobile_ads`, `in_app_purchase`) are deferred to Stage 4.6 — do not add them yet.
-- **Company/bank account screens are read-only** on mobile (no create/edit/delete).
+- **Company/bank account screens are read-only** in online mode (no create/edit/delete). Full CRUD in offline mode.
+- **App mode**: `appModeProvider` (`AppMode.offline` / `AppMode.online` / `null`). `null` = first launch → Welcome Screen. Screens guard auth only when `isOnline`.
 
 ## Related Projects
 

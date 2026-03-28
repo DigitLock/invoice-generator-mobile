@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../models/invoice.dart';
 import '../models/pagination.dart';
+import '../providers/app_mode_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/invoice_provider.dart';
 import '../widgets/invoice_card.dart';
@@ -128,9 +129,12 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-    if (authState.status != AuthStatus.authenticated) {
-      return const Scaffold(body: LoadingIndicator());
+    final isOnline = ref.watch(appModeProvider) == AppMode.online;
+    if (isOnline) {
+      final authState = ref.watch(authProvider);
+      if (authState.status != AuthStatus.authenticated) {
+        return const Scaffold(body: LoadingIndicator());
+      }
     }
 
     final firstPageParams = InvoiceListParams(

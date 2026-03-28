@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../providers/app_mode_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/invoice_provider.dart';
 import '../widgets/invoice_card.dart';
@@ -16,9 +17,15 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    if (authState.status != AuthStatus.authenticated) {
-      return const Scaffold(body: LoadingIndicator());
+    final appMode = ref.watch(appModeProvider);
+    final isOnline = appMode == AppMode.online;
+
+    // In online mode, wait for auth before fetching
+    if (isOnline) {
+      final authState = ref.watch(authProvider);
+      if (authState.status != AuthStatus.authenticated) {
+        return const Scaffold(body: LoadingIndicator());
+      }
     }
 
     final invoices = ref.watch(invoiceListProvider(_dashboardParams));
@@ -28,9 +35,14 @@ class DashboardScreen extends ConsumerWidget {
         title: const Text('Dashboard'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _confirmLogout(context, ref),
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.push('/settings'),
           ),
+          if (isOnline)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: () => _confirmLogout(context, ref),
+            ),
         ],
       ),
       body: Column(

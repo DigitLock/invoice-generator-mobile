@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/client.dart';
+import '../providers/app_mode_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/client_provider.dart';
 import '../widgets/status_badge.dart';
@@ -34,9 +35,12 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-    if (authState.status != AuthStatus.authenticated) {
-      return const Scaffold(body: LoadingIndicator());
+    final isOnline = ref.watch(appModeProvider) == AppMode.online;
+    if (isOnline) {
+      final authState = ref.watch(authProvider);
+      if (authState.status != AuthStatus.authenticated) {
+        return const Scaffold(body: LoadingIndicator());
+      }
     }
 
     final clients = ref.watch(clientListProvider(_statusFilter));

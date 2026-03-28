@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/company.dart';
 import '../models/bank_account.dart';
+import '../providers/app_mode_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/company_provider.dart';
 import '../providers/bank_account_provider.dart';
@@ -22,9 +23,12 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-    if (authState.status != AuthStatus.authenticated) {
-      return const Scaffold(body: LoadingIndicator());
+    final isOnline = ref.watch(appModeProvider) == AppMode.online;
+    if (isOnline) {
+      final authState = ref.watch(authProvider);
+      if (authState.status != AuthStatus.authenticated) {
+        return const Scaffold(body: LoadingIndicator());
+      }
     }
 
     final companies = ref.watch(companyListProvider);
