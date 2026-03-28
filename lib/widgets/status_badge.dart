@@ -11,6 +11,9 @@ class StatusBadge extends StatelessWidget {
     'partially_paid': _BadgeColors(Color(0xFFFFF7ED), Color(0xFFC2410C)),
     'paid': _BadgeColors(Color(0xFFDCFCE7), Color(0xFF15803D)),
     'cancelled': _BadgeColors(Color(0xFFFEE2E2), Color(0xFFB91C1C)),
+    // Client statuses
+    'active': _BadgeColors(Color(0xFFDCFCE7), Color(0xFF15803D)),
+    'inactive': _BadgeColors(Color(0xFFF3F4F6), Color(0xFF374151)),
   };
 
   static String _label(String status) {
@@ -25,6 +28,10 @@ class StatusBadge extends StatelessWidget {
         return 'Paid';
       case 'cancelled':
         return 'Cancelled';
+      case 'active':
+        return 'Active';
+      case 'inactive':
+        return 'Inactive';
       default:
         return status;
     }

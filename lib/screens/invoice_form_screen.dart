@@ -1,20 +1,558 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
-class InvoiceFormScreen extends StatelessWidget {
+import '../data/invoice_repository.dart';
+import '../models/company.dart';
+import '../models/client.dart';
+import '../models/bank_account.dart';
+import '../models/invoice.dart';
+import '../providers/invoice_provider.dart';
+import '../providers/company_provider.dart';
+import '../providers/client_provider.dart';
+import '../providers/bank_account_provider.dart';
+import '../widgets/line_item_row.dart';
+import '../widgets/loading_indicator.dart';
+import '../widgets/error_view.dart';
+
+class InvoiceFormScreen extends ConsumerStatefulWidget {
   const InvoiceFormScreen({super.key, this.invoiceId});
 
   final String? invoiceId;
 
-  bool get isEditing => invoiceId != null;
+  @override
+  ConsumerState<InvoiceFormScreen> createState() => _InvoiceFormScreenState();
+}
+
+class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _initialized = false;
+
+  // Entity selection
+  int? _companyId;
+  int? _clientId;
+  int? _bankAccountId;
+
+  // Invoice details
+  final _invoiceNumberController = TextEditingController();
+  DateTime _issueDate = DateTime.now();
+  DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
+  String _currency = 'EUR';
+  final _vatRateController = TextEditingController(text: '0');
+  final _contractRefController = TextEditingController();
+  final _externalRefController = TextEditingController();
+  final _notesController = TextEditingController();
+
+  // Line items
+  final List<LineItemData> _items = [LineItemData()];
+
+  bool get isEditing => widget.invoiceId != null;
+  int get _editId => int.parse(widget.invoiceId!);
+
+  @override
+  void dispose() {
+    _invoiceNumberController.dispose();
+    _vatRateController.dispose();
+    _contractRefController.dispose();
+    _externalRefController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  double get _subtotal =>
+      _items.fold(0.0, (sum, item) => sum + item.total);
+
+  double get _vatAmount {
+    final rate = double.tryParse(_vatRateController.text) ?? 0;
+    return (_subtotal * rate / 100 * 100).roundToDouble() / 100;
+  }
+
+  double get _total => _subtotal + _vatAmount;
+
+  void _populateFromInvoice(Invoice inv) {
+    if (_initialized) return;
+    _initialized = true;
+
+    _companyId = inv.companyId;
+    _clientId = inv.clientId;
+    _bankAccountId = inv.bankAccountId;
+    _invoiceNumberController.text = inv.invoiceNumber;
+    _issueDate = DateTime.tryParse(inv.issueDate) ?? DateTime.now();
+    _dueDate = DateTime.tryParse(inv.dueDate) ?? DateTime.now();
+    _currency = inv.currency;
+    _vatRateController.text = inv.vatRate;
+    _contractRefController.text = inv.contractReference ?? '';
+    _externalRefController.text = inv.externalReference ?? '';
+    _notesController.text = inv.notes ?? '';
+
+    _items.clear();
+    for (final item in inv.items) {
+      _items.add(LineItemData(
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      ));
+    }
+    if (_items.isEmpty) _items.add(LineItemData());
+  }
+
+  Future<void> _pickDate(BuildContext context, bool isIssueDate) async {
+    final initial = isIssueDate ? _issueDate : _dueDate;
+    final first = isIssueDate ? DateTime(2020) : _issueDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isIssueDate) {
+          _issueDate = picked;
+          if (_dueDate.isBefore(_issueDate)) _dueDate = _issueDate;
+        } else {
+          _dueDate = picked;
+        }
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_companyId == null || _clientId == null || _bankAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select company, client, and bank account')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final payload = <String, dynamic>{
+      'company_id': _companyId,
+      'client_id': _clientId,
+      'bank_account_id': _bankAccountId,
+      'issue_date': DateFormat('yyyy-MM-dd').format(_issueDate),
+      'due_date': DateFormat('yyyy-MM-dd').format(_dueDate),
+      'currency': _currency,
+      'vat_rate': _vatRateController.text,
+      'items': _items.map((i) => i.toJson()).toList(),
+    };
+
+    if (_contractRefController.text.isNotEmpty) {
+      payload['contract_reference'] = _contractRefController.text;
+    }
+    if (_externalRefController.text.isNotEmpty) {
+      payload['external_reference'] = _externalRefController.text;
+    }
+    if (_notesController.text.isNotEmpty) {
+      payload['notes'] = _notesController.text;
+    }
+
+    if (isEditing) {
+      payload['invoice_number'] = _invoiceNumberController.text;
+    }
+
+    try {
+      print('[InvoiceForm] Saving payload: $payload');
+      final repo = ref.read(invoiceRepositoryProvider);
+      if (isEditing) {
+        await repo.update(_editId, payload);
+      } else {
+        await repo.create(payload);
+      }
+      print('[InvoiceForm] Save successful');
+      ref.invalidate(invoiceListProvider);
+      if (isEditing) ref.invalidate(invoiceDetailProvider(_editId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(isEditing ? 'Invoice updated' : 'Invoice created')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Load existing invoice for edit mode
+    if (isEditing && !_initialized) {
+      final invoiceAsync = ref.watch(invoiceDetailProvider(_editId));
+      return invoiceAsync.when(
+        loading: () => Scaffold(
+          appBar: AppBar(title: const Text('Edit Invoice')),
+          body: const LoadingIndicator(),
+        ),
+        error: (e, _) => Scaffold(
+          appBar: AppBar(title: const Text('Edit Invoice')),
+          body: ErrorView(
+            message: e.toString(),
+            onRetry: () => ref.invalidate(invoiceDetailProvider(_editId)),
+          ),
+        ),
+        data: (inv) {
+          _populateFromInvoice(inv);
+          return _buildForm(context);
+        },
+      );
+    }
+
+    return _buildForm(context);
+  }
+
+  Widget _buildForm(BuildContext context) {
+    final companies = ref.watch(companyListProvider);
+    final clients = ref.watch(clientListProvider('active'));
+    final bankAccounts = _companyId != null
+        ? ref.watch(bankAccountListProvider(_companyId!))
+        : null;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isEditing ? 'Edit Invoice' : 'New Invoice'),
+        actions: [
+          IconButton(
+            onPressed: _isLoading ? null : _save,
+            icon: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check),
+          ),
+        ],
       ),
-      body: Center(
-        child: Text(isEditing ? 'Edit Invoice: $invoiceId' : 'New Invoice'),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            // Entity selection
+            _SectionHeader('Entity Selection'),
+
+            // Company
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: companies.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('Error loading companies: $e'),
+                data: (list) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      value: _companyId,
+                      decoration: const InputDecoration(labelText: 'Company'),
+                      items: list
+                          .map((c) => DropdownMenuItem(
+                              value: c.id, child: Text(c.name)))
+                          .toList(),
+                      onChanged: (v) {
+                        setState(() {
+                          _companyId = v;
+                          _bankAccountId = null;
+                        });
+                      },
+                      validator: (v) => v == null ? 'Required' : null,
+                    ),
+                    if (list.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4, left: 4),
+                        child: Text(
+                          'No companies yet — create one in Company tab',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Client
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: clients.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('Error loading clients: $e'),
+                data: (list) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      value: _clientId,
+                      decoration: const InputDecoration(labelText: 'Client'),
+                      items: list
+                          .map((c) => DropdownMenuItem(
+                              value: c.id, child: Text(c.name)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _clientId = v),
+                      validator: (v) => v == null ? 'Required' : null,
+                    ),
+                    if (list.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4, left: 4),
+                        child: Text(
+                          'No active clients yet — create one in Clients tab',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Bank account
+            if (bankAccounts != null)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: bankAccounts.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text('Error: $e'),
+                  data: (list) => DropdownButtonFormField<int>(
+                    value: _bankAccountId,
+                    decoration:
+                        const InputDecoration(labelText: 'Bank Account'),
+                    items: list
+                        .map((b) => DropdownMenuItem(
+                            value: b.id,
+                            child: Text('${b.bankName} (${b.currency})')))
+                        .toList(),
+                    onChanged: (v) => setState(() => _bankAccountId = v),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                ),
+              ),
+
+            const Divider(height: 32),
+            _SectionHeader('Invoice Details'),
+
+            // Invoice number
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextFormField(
+                controller: _invoiceNumberController,
+                decoration: const InputDecoration(labelText: 'Invoice Number'),
+                enabled: isEditing,
+                readOnly: !isEditing,
+              ),
+            ),
+            if (!isEditing)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Auto-generated on save',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                ),
+              ),
+
+            // Dates
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _DateField(
+                      label: 'Issue Date',
+                      date: _issueDate,
+                      onTap: () => _pickDate(context, true),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _DateField(
+                      label: 'Due Date',
+                      date: _dueDate,
+                      onTap: () => _pickDate(context, false),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Currency + VAT rate
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _currency,
+                      decoration: const InputDecoration(labelText: 'Currency'),
+                      items: const [
+                        DropdownMenuItem(value: 'EUR', child: Text('EUR')),
+                        DropdownMenuItem(value: 'RSD', child: Text('RSD')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setState(() => _currency = v);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _vatRateController,
+                      decoration: const InputDecoration(
+                        labelText: 'VAT Rate (%)',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Contract + external ref
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextFormField(
+                controller: _contractRefController,
+                decoration:
+                    const InputDecoration(labelText: 'Contract Reference'),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextFormField(
+                controller: _externalRefController,
+                decoration:
+                    const InputDecoration(labelText: 'External Reference'),
+              ),
+            ),
+
+            const Divider(height: 32),
+            _SectionHeader('Line Items'),
+
+            // Items
+            ..._items.asMap().entries.map((entry) => LineItemRow(
+                  index: entry.key,
+                  item: entry.value,
+                  onChanged: () => setState(() {}),
+                  onDismissed: () {
+                    setState(() {
+                      _items.removeAt(entry.key);
+                      if (_items.isEmpty) _items.add(LineItemData());
+                    });
+                  },
+                )),
+
+            if (_items.length < 10)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      setState(() => _items.add(LineItemData())),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Item'),
+                ),
+              ),
+
+            const Divider(height: 32),
+            _SectionHeader('Totals'),
+            _TotalRow('Subtotal', _subtotal, _currency),
+            _TotalRow('VAT', _vatAmount, _currency),
+            _TotalRow('Total', _total, _currency, bold: true),
+
+            const Divider(height: 32),
+            _SectionHeader('Notes'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  alignLabelWithHint: true,
+                ),
+                maxLines: 4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.title);
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Text(
+        title,
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  const _DateField({
+    required this.label,
+    required this.date,
+    required this.onTap,
+  });
+
+  final String label;
+  final DateTime date;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label),
+        child: Text(DateFormat('dd MMM yyyy').format(date)),
+      ),
+    );
+  }
+}
+
+class _TotalRow extends StatelessWidget {
+  const _TotalRow(this.label, this.amount, this.currency, {this.bold = false});
+
+  final String label;
+  final double amount;
+  final String currency;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    final symbol = currency == 'EUR' ? '\u20AC' : currency;
+    final style = bold
+        ? Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(fontWeight: FontWeight.w700)
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: style),
+          Text('$symbol${amount.toStringAsFixed(2)}', style: style),
+        ],
       ),
     );
   }

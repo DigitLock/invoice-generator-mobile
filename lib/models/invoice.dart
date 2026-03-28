@@ -5,8 +5,8 @@ import 'bank_account.dart';
 class Invoice {
   final int id;
   final String invoiceNumber;
-  final int userId;
-  final int familyId;
+  final String userId;
+  final String familyId;
   final int companyId;
   final int clientId;
   final int bankAccountId;
@@ -35,6 +35,7 @@ class Invoice {
     required this.userId,
     required this.familyId,
     required this.companyId,
+
     required this.clientId,
     required this.bankAccountId,
     required this.issueDate,
@@ -61,8 +62,8 @@ class Invoice {
     return Invoice(
       id: json['id'] as int,
       invoiceNumber: json['invoice_number'] as String,
-      userId: json['user_id'] as int,
-      familyId: json['family_id'] as int,
+      userId: json['user_id'].toString(),
+      familyId: json['family_id'].toString(),
       companyId: json['company_id'] as int,
       clientId: json['client_id'] as int,
       bankAccountId: json['bank_account_id'] as int,
