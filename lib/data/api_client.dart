@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,48 +44,48 @@ class AuthInterceptor extends QueuedInterceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
-    print('[AuthInterceptor] --- Request ---');
-    print('[AuthInterceptor] URL: ${options.uri}');
-    print('[AuthInterceptor] Storage key: "$tokenKey", storage instance: ${identityHashCode(storage)}');
-
     final token = await storage.read(key: tokenKey);
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
-      print('[AuthInterceptor] Token attached (${token.length} chars): ${token.substring(0, token.length < 20 ? token.length : 20)}...');
-
-      // Decode JWT payload to inspect claims types
-      _logJwtClaims(token);
-    } else {
-      print('[AuthInterceptor] WARNING: No token in storage! token=$token');
     }
     handler.next(options);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    print('[AuthInterceptor] --- Error ---');
-    print('[AuthInterceptor] ${err.response?.statusCode} for ${err.requestOptions.uri}');
-    print('[AuthInterceptor] Response body: ${err.response?.data}');
     if (err.response?.statusCode == 401) {
-      print('[AuthInterceptor] Clearing token from storage');
       await storage.delete(key: tokenKey);
     }
-    handler.next(err);
+
+    final message = _userFriendlyMessage(err);
+    handler.next(err.copyWith(message: message));
   }
 
-  void _logJwtClaims(String token) {
-    try {
-      final parts = token.split('.');
-      if (parts.length != 3) {
-        print('[AuthInterceptor] JWT: invalid format (${parts.length} parts)');
-        return;
-      }
-      var payload = parts[1];
-      payload = base64Url.normalize(payload);
-      final decoded = utf8.decode(base64Url.decode(payload));
-      print('[AuthInterceptor] JWT claims: $decoded');
-    } catch (e) {
-      print('[AuthInterceptor] JWT decode error: $e');
+  String _userFriendlyMessage(DioException err) {
+    if (err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.sendTimeout ||
+        err.type == DioExceptionType.receiveTimeout) {
+      return 'Connection timed out. Check your internet.';
+    }
+    if (err.type == DioExceptionType.connectionError) {
+      return 'No internet connection.';
+    }
+    switch (err.response?.statusCode) {
+      case 401:
+        return 'Session expired. Please login again.';
+      case 403:
+        return 'Access denied.';
+      case 404:
+        return 'Not found.';
+      case 500:
+        return 'Server error. Please try again later.';
+      default:
+        // Try to extract error message from API response
+        final data = err.response?.data;
+        if (data is Map<String, dynamic> && data.containsKey('error')) {
+          return data['error'] as String;
+        }
+        return 'Something went wrong. Please try again.';
     }
   }
 }

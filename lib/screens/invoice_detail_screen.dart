@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +12,7 @@ import '../widgets/status_badge.dart';
 import '../widgets/overdue_badge.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/error_view.dart';
+import '../widgets/snackbar_helper.dart';
 
 const _allowedTransitions = {
   'draft': ['sent', 'cancelled'],
@@ -224,6 +226,7 @@ class _DetailScaffold extends ConsumerWidget {
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
+              HapticFeedback.mediumImpact();
               try {
                 await ref
                     .read(invoiceRepositoryProvider)
@@ -232,9 +235,7 @@ class _DetailScaffold extends ConsumerWidget {
                 if (context.mounted) context.pop();
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Delete failed: $e')),
-                  );
+                  showErrorSnackbar(context, 'Delete failed: $e');
                 }
               }
             },
@@ -292,6 +293,7 @@ class _DetailScaffold extends ConsumerWidget {
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
+              HapticFeedback.mediumImpact();
               try {
                 await ref
                     .read(invoiceRepositoryProvider)
@@ -299,15 +301,11 @@ class _DetailScaffold extends ConsumerWidget {
                 ref.invalidate(invoiceDetailProvider(invoiceId));
                 ref.invalidate(invoiceListProvider);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Status updated to ${_statusLabel(newStatus)}')),
-                  );
+                  showSuccessSnackbar(context, 'Status updated to ${_statusLabel(newStatus)}');
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed: $e')),
-                  );
+                  showErrorSnackbar(context, 'Status change failed: $e');
                 }
               }
             },
@@ -327,27 +325,21 @@ class _DetailScaffold extends ConsumerWidget {
       ref.invalidate(invoiceListProvider);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
-        );
+        showErrorSnackbar(context, 'Failed: $e');
       }
     }
   }
 
   void _downloadPdf(BuildContext context, WidgetRef ref) async {
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Downloading PDF...')),
-      );
+      showSuccessSnackbar(context, 'Downloading PDF...');
       final path = await ref
           .read(invoiceRepositoryProvider)
           .downloadPdf(invoiceId);
       await OpenFile.open(path);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF download failed: $e')),
-        );
+        showErrorSnackbar(context, 'PDF download failed: $e');
       }
     }
   }

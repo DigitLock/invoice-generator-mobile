@@ -26,8 +26,6 @@ class RemoteInvoiceRepository implements InvoiceRepository {
     if (status != null) queryParams['status'] = status;
     if (search != null) queryParams['search'] = search;
 
-    print('[RemoteInvoiceRepository] GET /invoices with params: page=$page, pageSize=$pageSize, status=$status');
-
     final response = await _dio.get('/invoices', queryParameters: queryParams);
     final data = response.data as Map<String, dynamic>;
 

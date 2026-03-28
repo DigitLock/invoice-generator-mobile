@@ -39,12 +39,19 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
         ),
         data: (list) {
           if (list.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'No companies yet.\nCreate one via the web dashboard.',
-                  textAlign: TextAlign.center,
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.business_outlined, size: 64, color: Color(0xFF9CA3AF)),
+                    SizedBox(height: 16),
+                    Text(
+                      'No companies yet.\nCreate one via the web dashboard.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
             );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +14,7 @@ import '../providers/company_provider.dart';
 import '../providers/client_provider.dart';
 import '../providers/bank_account_provider.dart';
 import '../widgets/line_item_row.dart';
+import '../widgets/snackbar_helper.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/error_view.dart';
 
@@ -122,9 +124,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_companyId == null || _clientId == null || _bankAccountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select company, client, and bank account')),
-      );
+      showErrorSnackbar(context, 'Please select company, client, and bank account');
       return;
     }
 
@@ -156,27 +156,22 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     }
 
     try {
-      print('[InvoiceForm] Saving payload: $payload');
       final repo = ref.read(invoiceRepositoryProvider);
       if (isEditing) {
         await repo.update(_editId, payload);
       } else {
         await repo.create(payload);
       }
-      print('[InvoiceForm] Save successful');
       ref.invalidate(invoiceListProvider);
       if (isEditing) ref.invalidate(invoiceDetailProvider(_editId));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(isEditing ? 'Invoice updated' : 'Invoice created')),
-        );
+        HapticFeedback.mediumImpact();
+        showSuccessSnackbar(context, isEditing ? 'Invoice updated' : 'Invoice created');
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
-        );
+        showErrorSnackbar(context, 'Save failed: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

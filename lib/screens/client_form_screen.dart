@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +7,7 @@ import '../data/client_repository.dart';
 import '../providers/client_provider.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/error_view.dart';
+import '../widgets/snackbar_helper.dart';
 
 class ClientFormScreen extends ConsumerStatefulWidget {
   const ClientFormScreen({super.key, this.clientId});
@@ -91,18 +93,13 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
       }
       ref.invalidate(clientListProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text(isEditing ? 'Client updated' : 'Client created')),
-        );
+        HapticFeedback.mediumImpact();
+        showSuccessSnackbar(context, isEditing ? 'Client updated' : 'Client created');
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
-        );
+        showErrorSnackbar(context, 'Save failed: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
