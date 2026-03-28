@@ -15,6 +15,7 @@ import '../screens/client_form_screen.dart';
 import '../screens/company_detail_screen.dart';
 import '../screens/company_form_screen.dart';
 import '../screens/bank_account_form_screen.dart';
+import '../screens/server_settings_screen.dart';
 import '../screens/settings_screen.dart';
 import '../widgets/shell_scaffold.dart';
 
@@ -81,13 +82,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
       ),
-      // TODO: /server-settings route — Stage 4.9
       GoRoute(
         path: '/server-settings',
-        builder: (context, state) => Scaffold(
-          appBar: AppBar(title: const Text('Server Settings')),
-          body: const Center(child: Text('Coming soon')),
-        ),
+        builder: (context, state) => const ServerSettingsScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => ShellScaffold(child: child),

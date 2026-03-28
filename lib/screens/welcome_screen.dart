@@ -43,7 +43,9 @@ class WelcomeScreen extends ConsumerWidget {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: () {
-                      ref.read(appModeProvider.notifier).setMode(AppMode.offline);
+                      ref
+                          .read(appModeProvider.notifier)
+                          .setMode(AppMode.offline);
                       context.go('/');
                     },
                     child: const Text('Create Invoice Offline'),
@@ -54,11 +56,15 @@ class WelcomeScreen extends ConsumerWidget {
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: () {
-                      context.push('/server-settings');
+                      ref
+                          .read(appModeProvider.notifier)
+                          .setMode(AppMode.online);
+                      context.go('/');
                     },
                     child: const Text('Connect to Server'),
                   ),
                 ),
+
                 const SizedBox(height: 48),
                 Text(
                   'v1.0.0',

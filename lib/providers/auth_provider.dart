@@ -47,14 +47,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _checkStoredAuth() async {
-    final isAuth = await _repository.isAuthenticated();
-    if (isAuth) {
-      final user = await _repository.getStoredUser();
-      state = AuthState(
-        status: AuthStatus.authenticated,
-        user: user,
-      );
-    } else {
+    try {
+      final isAuth = await _repository.isAuthenticated();
+      if (!mounted) return;
+      if (isAuth) {
+        final user = await _repository.getStoredUser();
+        if (!mounted) return;
+        state = AuthState(
+          status: AuthStatus.authenticated,
+          user: user,
+        );
+      } else {
+        state = const AuthState(status: AuthStatus.unauthenticated);
+      }
+    } catch (_) {
+      if (!mounted) return;
       state = const AuthState(status: AuthStatus.unauthenticated);
     }
   }

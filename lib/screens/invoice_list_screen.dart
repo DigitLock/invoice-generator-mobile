@@ -41,7 +41,7 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
 
-  final List<InvoiceListItem> _allItems = [];
+  List<InvoiceListItem> _extraPages = [];
   int _currentPage = 1;
   bool _hasMore = true;
   bool _isLoadingMore = false;
@@ -59,8 +59,8 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
     super.dispose();
   }
 
-  InvoiceListParams get _params => InvoiceListParams(
-        page: _currentPage,
+  InvoiceListParams get _firstPageParams => InvoiceListParams(
+        page: 1,
         pageSize: 20,
         status: _statusFilter,
         search: _searchQuery,
@@ -81,11 +81,17 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
       _currentPage++;
     });
 
-    final params = _params;
+    final params = InvoiceListParams(
+      page: _currentPage,
+      pageSize: 20,
+      status: _statusFilter,
+      search: _searchQuery,
+    );
+
     ref.read(invoiceListProvider(params).future).then((response) {
       if (mounted) {
         setState(() {
-          _allItems.addAll(response.items);
+          _extraPages.addAll(response.items);
           _hasMore = response.pagination.hasNext;
           _isLoadingMore = false;
         });
@@ -100,31 +106,34 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
     });
   }
 
-  void _resetAndLoad() {
+  void _resetPagination() {
     setState(() {
-      _allItems.clear();
+      _extraPages = [];
       _currentPage = 1;
       _hasMore = true;
       _isLoadingMore = false;
     });
-    // Invalidate page 1 to force reload
-    ref.invalidate(invoiceListProvider(InvoiceListParams(
-      page: 1,
-      pageSize: 20,
-      status: _statusFilter,
-      search: _searchQuery,
-    )));
   }
 
   void _onFilterChanged(String? status) {
     if (_statusFilter == status) return;
     _statusFilter = status;
-    _resetAndLoad();
+    _resetPagination();
+    ref.invalidate(invoiceListProvider(_firstPageParams));
   }
 
   void _onSearchSubmitted(String query) {
     _searchQuery = query.isEmpty ? null : query;
-    _resetAndLoad();
+    _resetPagination();
+    ref.invalidate(invoiceListProvider(_firstPageParams));
+  }
+
+  Future<void> _pushAndRefresh(String path) async {
+    await context.push(path);
+    if (mounted) {
+      _resetPagination();
+      ref.invalidate(invoiceListProvider(_firstPageParams));
+    }
   }
 
   @override
@@ -137,13 +146,7 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
       }
     }
 
-    final firstPageParams = InvoiceListParams(
-      page: 1,
-      pageSize: 20,
-      status: _statusFilter,
-      search: _searchQuery,
-    );
-    final firstPage = ref.watch(invoiceListProvider(firstPageParams));
+    final firstPage = ref.watch(invoiceListProvider(_firstPageParams));
 
     return Scaffold(
       appBar: _showSearch
@@ -167,7 +170,8 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
                   });
                   if (_searchQuery != null) {
                     _searchQuery = null;
-                    _resetAndLoad();
+                    _resetPagination();
+                    ref.invalidate(invoiceListProvider(_firstPageParams));
                   }
                 },
               ),
@@ -192,24 +196,17 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
               loading: () => const LoadingIndicator(),
               error: (error, _) => ErrorView(
                 message: error.toString(),
-                onRetry: _resetAndLoad,
+                onRetry: () {
+                  _resetPagination();
+                  ref.invalidate(invoiceListProvider(_firstPageParams));
+                },
               ),
               data: (response) {
-                // Seed _allItems from first page if empty
-                if (_allItems.isEmpty && response.items.isNotEmpty) {
-                  // Use addPostFrameCallback to avoid setState during build
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted && _allItems.isEmpty) {
-                      setState(() {
-                        _allItems.addAll(response.items);
-                        _hasMore = response.pagination.hasNext;
-                      });
-                    }
-                  });
-                  return _buildList(response.items, response.pagination);
-                }
-                final items = _allItems.isEmpty ? response.items : _allItems;
-                return _buildList(items, response.pagination);
+                final allItems = [...response.items, ..._extraPages];
+                _hasMore = _currentPage == 1
+                    ? response.pagination.hasNext
+                    : _hasMore;
+                return _buildList(allItems);
               },
             ),
           ),
@@ -217,24 +214,25 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/invoices/new'),
+        onPressed: () => _pushAndRefresh('/invoices/new'),
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  Widget _buildList(List<InvoiceListItem> items, PaginationMeta pagination) {
+  Widget _buildList(List<InvoiceListItem> items) {
     if (items.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.receipt_long_outlined, size: 64, color: Color(0xFF9CA3AF)),
+            const Icon(Icons.receipt_long_outlined,
+                size: 64, color: Color(0xFF9CA3AF)),
             const SizedBox(height: 16),
             const Text('No invoices found'),
             const SizedBox(height: 16),
             FilledButton.tonal(
-              onPressed: () => context.push('/invoices/new'),
+              onPressed: () => _pushAndRefresh('/invoices/new'),
               child: const Text('Create Invoice'),
             ),
           ],
@@ -244,15 +242,8 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
 
     return RefreshIndicator(
       onRefresh: () async {
-        _allItems.clear();
-        _currentPage = 1;
-        _hasMore = true;
-        return ref.refresh(invoiceListProvider(InvoiceListParams(
-          page: 1,
-          pageSize: 20,
-          status: _statusFilter,
-          search: _searchQuery,
-        )).future);
+        _resetPagination();
+        return ref.refresh(invoiceListProvider(_firstPageParams).future);
       },
       child: ListView.builder(
         controller: _scrollController,

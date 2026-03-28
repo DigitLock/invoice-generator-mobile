@@ -2,20 +2,35 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-const _apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8081');
-const _authUrl = String.fromEnvironment('AUTH_URL', defaultValue: 'http://localhost:8080');
+import '../providers/server_config_provider.dart';
+
+const _fallbackApiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8081');
+const _fallbackAuthUrl = String.fromEnvironment('AUTH_URL', defaultValue: 'http://localhost:8080');
 const tokenKey = 'jwt_token';
 
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage();
 });
 
+/// Resolves the active API URL from server config, falling back to dart-define.
+String _resolveApiUrl(Ref ref) {
+  final active = ref.watch(serverConfigProvider).activeServer;
+  return active?.apiUrl ?? _fallbackApiUrl;
+}
+
+String _resolveAuthUrl(Ref ref) {
+  final active = ref.watch(serverConfigProvider).activeServer;
+  return active?.authUrl ?? _fallbackAuthUrl;
+}
+
 /// Main Dio instance — points to Invoice Generator API, includes JWT interceptor.
+/// Rebuilds when the active server changes.
 final dioProvider = Provider<Dio>((ref) {
+  final apiUrl = _resolveApiUrl(ref);
   final storage = ref.watch(secureStorageProvider);
 
   final dio = Dio(BaseOptions(
-    baseUrl: '$_apiUrl/api/v1',
+    baseUrl: '$apiUrl/api/v1',
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 30),
     headers: {'Content-Type': 'application/json'},
@@ -27,9 +42,12 @@ final dioProvider = Provider<Dio>((ref) {
 });
 
 /// Auth Dio instance — points to Expense Tracker API, no JWT interceptor.
+/// Rebuilds when the active server changes.
 final authDioProvider = Provider<Dio>((ref) {
+  final authUrl = _resolveAuthUrl(ref);
+
   return Dio(BaseOptions(
-    baseUrl: '$_authUrl/api/v1',
+    baseUrl: '$authUrl/api/v1',
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 30),
     headers: {'Content-Type': 'application/json'},
@@ -80,7 +98,6 @@ class AuthInterceptor extends QueuedInterceptor {
       case 500:
         return 'Server error. Please try again later.';
       default:
-        // Try to extract error message from API response
         final data = err.response?.data;
         if (data is Map<String, dynamic> && data.containsKey('error')) {
           return data['error'] as String;

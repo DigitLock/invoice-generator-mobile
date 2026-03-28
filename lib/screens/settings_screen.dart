@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/app_mode_provider.dart';
+import '../providers/server_config_provider.dart';
+import '../widgets/snackbar_helper.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -86,6 +88,25 @@ class SettingsScreen extends ConsumerWidget {
             title: Text('Invoice Generator'),
             subtitle: Text('v1.0.0'),
           ),
+
+          // Debug section
+          const Divider(height: 32),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Debug',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: Icon(Icons.delete_sweep_outlined,
+                color: theme.colorScheme.error),
+            title: const Text('Clear Server Config'),
+            subtitle: const Text('Remove all saved servers'),
+            onTap: () => _confirmClearServers(context, ref),
+          ),
         ],
       ),
     );
@@ -111,6 +132,35 @@ class SettingsScreen extends ConsumerWidget {
               context.go('/welcome');
             },
             child: const Text('Switch'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmClearServers(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear Server Config'),
+        content: const Text(
+          'Remove all saved servers? The app will use dart-define fallback URLs.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              ref.read(serverConfigProvider.notifier).clearAll();
+              showSuccessSnackbar(context, 'Server config cleared');
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Clear'),
           ),
         ],
       ),
