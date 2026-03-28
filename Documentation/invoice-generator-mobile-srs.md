@@ -6,7 +6,7 @@
 
 This System Requirements Specification (SRS) document provides detailed technical requirements for the **Invoice Generator mobile application** (Stage 4) — a Flutter app for iOS and Android that enables authenticated users to create invoices, manage clients, and track invoice statuses on the go.
 
-**Document Version:** 0.1
+**Document Version:** 0.3
 
 ### Change Log
 
@@ -14,6 +14,7 @@ This System Requirements Specification (SRS) document provides detailed technica
 |---------|------|---------|
 | 0.1 | 2026-03-27 | Initial draft aligned with PRD v0.4 Stage 4 requirements |
 | 0.2 | 2026-03-28 | Add repository strategy, monetization (ads + IAP), update API base URL |
+| 0.3 | 2026-03-28 | Add offline mode, welcome screen, server settings, app modes |
 
 **Document Purpose**
 
@@ -21,11 +22,11 @@ This document defines the mobile app architecture, navigation structure, screen 
 
 **Scope**
 
-The mobile app is a companion to the web dashboard (Stage 3). It consumes the same REST API (Stage 2) and shares JWT authentication with Expense Tracker. The mobile app is **authorized-only** — there is no guest mode.
+The mobile app is a companion to the web dashboard (Stage 3). It supports two modes: **online mode** consuming the REST API (Stage 2) with JWT authentication, and **offline mode** with local SQLite storage and client-side PDF generation.
 
-- **Core Functionality**: Invoice creation, invoice history with filters, status management (5 statuses + isOverdue), client management (view, create, change status), read-only company/bank account viewing
+- **Core Functionality**: Invoice creation, invoice history with filters, status management (5 statuses + isOverdue), client management (view, create, change status), company/bank account management, offline mode with local SQLite storage, online mode with configurable server
 - **Monetization**: Free with ads (Google AdMob), with in-app purchase to remove ads
-- **Out of Scope**: Company/bank account editing (MO-05), guest invoice creation, registration (users register via Expense Tracker), PDF generation on device (download from server), offline mode
+- **Out of Scope**: Company/bank account editing in online mode (MO-05), guest invoice creation, registration (users register via Expense Tracker), data sync between offline and online modes
 - **Distribution**: TestFlight (iOS) and APK sideload (Android) for initial testing, then public release on App Store and Google Play
 
 **Target Audience**
@@ -89,6 +90,47 @@ The monetization model adds the following to the architecture:
 - In-app purchase requires App Store / Google Play developer accounts ($99/year Apple, $25 one-time Google)
 - Receipt validation can be done client-side for MVP; server-side validation is a future improvement
 
+## 1.2 App Modes
+
+The app supports two operating modes, selected on first launch via the Welcome Screen and stored in `SharedPreferences`. The mode can be changed later via Settings.
+
+### 1.2.1 Offline Mode
+
+Full invoicing functionality without a server connection. All data is stored locally on the device.
+
+| Aspect | Detail |
+|--------|--------|
+| Storage | SQLite database via `sqflite` |
+| Authentication | None required — single-user local mode |
+| Invoice CRUD | Full create, read, update, delete |
+| Client management | Full CRUD (create, edit, change status) |
+| Company management | Full CRUD (user manages their own company and bank accounts) |
+| PDF generation | Client-side using Dart `pdf` package |
+| Data isolation | Offline data is completely separate from any server |
+| Sync | Not supported — offline and online are independent |
+
+### 1.2.2 Online Mode
+
+Connected to a configurable Invoice Generator server. Requires JWT authentication via Expense Tracker.
+
+| Aspect | Detail |
+|--------|--------|
+| Storage | Server-side via REST API |
+| Authentication | JWT login via Expense Tracker auth service |
+| Invoice CRUD | Full create, read, update, delete via API |
+| Client management | Create, edit, change status via API |
+| Company management | Read-only on mobile (MO-05) — managed via web dashboard |
+| PDF generation | Server-side — download and open with system viewer |
+| Server configuration | User-configurable API URL and Auth URL via Server Settings |
+
+### 1.2.3 Mode Selection and Switching
+
+1. On first launch, the Welcome Screen presents two options: "Use Offline" and "Connect to Server"
+2. Selected mode is persisted in `SharedPreferences` (`app_mode` key: `offline` or `online`)
+3. Mode can be switched via the Settings screen at any time
+4. Switching modes does not delete data — offline data persists, online data is on the server
+5. When switching to online, the user must configure a server and authenticate
+
 **Technology Stack**
 
 - **Framework**: Flutter 3.x (Dart)
@@ -98,6 +140,9 @@ The monetization model adds the following to the architecture:
 - **Navigation**: GoRouter (declarative, supports deep linking)
 - **UI**: Material Design 3 with custom theme matching web app colors
 - **PDF Viewing**: `open_file` or `url_launcher` to open server-generated PDFs
+- **Local Database**: `sqflite` for offline mode SQLite storage
+- **PDF Generation**: `pdf` (Dart) for client-side PDF generation in offline mode
+- **File System**: `path_provider` for accessing temporary and documents directories
 - **Ads**: `google_mobile_ads` (AdMob banners + interstitials)
 - **In-App Purchase**: `in_app_purchase` (StoreKit for iOS, Google Play Billing for Android)
 - **Build**: Flutter CLI, Fastlane (optional for CI/CD)
@@ -180,22 +225,41 @@ lib/
 │   ├── auth.dart                      # LoginResponse, User
 │   └── pagination.dart                # PaginationMeta, PaginatedResponse
 ├── data/
+│   ├── repositories/                  # Abstract interfaces (Repository pattern)
+│   │   ├── invoice_repository.dart
+│   │   ├── company_repository.dart
+│   │   ├── client_repository.dart
+│   │   └── bank_account_repository.dart
+│   ├── remote/                        # Online mode: REST API via Dio
+│   │   ├── remote_invoice_repository.dart
+│   │   ├── remote_company_repository.dart
+│   │   ├── remote_client_repository.dart
+│   │   └── remote_bank_account_repository.dart
+│   ├── local/                         # Offline mode: SQLite
+│   │   ├── local_invoice_repository.dart
+│   │   ├── local_company_repository.dart
+│   │   ├── local_client_repository.dart
+│   │   └── local_bank_account_repository.dart
 │   ├── api_client.dart                # Dio instance with JWT interceptor
 │   ├── auth_repository.dart           # login(), logout(), token storage
-│   ├── invoice_repository.dart        # CRUD + status + PDF download
-│   ├── company_repository.dart        # list, get (read-only)
-│   ├── client_repository.dart         # list, get, create, update status
-│   └── bank_account_repository.dart   # list by company (read-only)
+│   ├── invoice_repository.dart        # Provider + re-exports abstract type
+│   ├── company_repository.dart        # Provider + re-exports abstract type
+│   ├── client_repository.dart         # Provider + re-exports abstract type
+│   └── bank_account_repository.dart   # Provider + re-exports abstract type
 ├── services/
-│   └── ad_service.dart                # AdMob initialization, banner/interstitial management
+│   ├── ad_service.dart                # AdMob initialization, banner/interstitial management
+│   ├── database_service.dart          # SQLite initialization and migrations
+│   └── local_pdf_service.dart         # Client-side PDF generation (offline mode)
 ├── providers/
 │   ├── auth_provider.dart
+│   ├── app_mode_provider.dart         # Offline/online mode state
 │   ├── invoice_provider.dart
 │   ├── company_provider.dart
 │   ├── client_provider.dart
 │   ├── bank_account_provider.dart
 │   └── purchase_provider.dart         # IAP state, ad-free purchase tracking
 ├── screens/
+│   ├── welcome_screen.dart            # First launch: choose offline or online
 │   ├── login_screen.dart
 │   ├── dashboard_screen.dart
 │   ├── invoice_list_screen.dart
@@ -204,6 +268,8 @@ lib/
 │   ├── client_list_screen.dart
 │   ├── client_form_screen.dart
 │   ├── company_detail_screen.dart
+│   ├── server_settings_screen.dart    # Configure server URL for online mode
+│   ├── settings_screen.dart           # App settings, mode switch
 │   └── purchase_screen.dart           # "Remove Ads" IAP flow
 └── widgets/
     ├── status_badge.dart
@@ -212,7 +278,8 @@ lib/
     ├── line_item_row.dart
     ├── ad_banner.dart                 # Conditional banner ad (hidden when purchased)
     ├── loading_indicator.dart
-    └── error_view.dart
+    ├── error_view.dart
+    └── snackbar_helper.dart           # Success/error snackbar utilities
 ```
 
 ---
@@ -240,10 +307,12 @@ lib/
 ### 2.2.3 Navigation Flow
 
 ```
-Login Screen (unauthenticated)
-    │
-    ▼
-Bottom Tab Bar Shell
+Welcome Screen (first launch or mode not set)
+    ├── "Use Offline" → Bottom Tab Bar Shell (offline mode)
+    └── "Connect to Server" → Server Settings → Login Screen
+                                                     │
+                                                     ▼
+Bottom Tab Bar Shell (online mode)
     ├── Tab 1: Dashboard
     │       └── Tap invoice → Invoice Detail
     │                            ├── Edit → Invoice Form
@@ -268,20 +337,46 @@ Bottom Tab Bar Shell
 
 | Route | Screen | Auth Required | Notes |
 |-------|--------|---------------|-------|
-| `/login` | LoginScreen | No | Redirect to `/` if authenticated |
-| `/` | DashboardScreen | Yes | Tab 1 |
-| `/invoices` | InvoiceListScreen | Yes | Tab 2 |
-| `/invoices/new` | InvoiceFormScreen | Yes | Create mode |
-| `/invoices/:id` | InvoiceDetailScreen | Yes | Read-only with actions |
-| `/invoices/:id/edit` | InvoiceFormScreen | Yes | Edit mode |
-| `/clients` | ClientListScreen | Yes | Tab 3 |
-| `/clients/new` | ClientFormScreen | Yes | Create mode |
-| `/clients/:id/edit` | ClientFormScreen | Yes | Edit mode |
-| `/company` | CompanyDetailScreen | Yes | Tab 4, read-only |
+| `/welcome` | WelcomeScreen | No | First launch, mode selection |
+| `/login` | LoginScreen | No (online only) | Redirect to `/` if authenticated |
+| `/server-settings` | ServerSettingsScreen | No | Configure server URL |
+| `/settings` | SettingsScreen | No | App settings, mode switch |
+| `/` | DashboardScreen | Yes (online) / No (offline) | Tab 1 |
+| `/invoices` | InvoiceListScreen | Yes / No | Tab 2 |
+| `/invoices/new` | InvoiceFormScreen | Yes / No | Create mode |
+| `/invoices/:id` | InvoiceDetailScreen | Yes / No | Read-only with actions |
+| `/invoices/:id/edit` | InvoiceFormScreen | Yes / No | Edit mode |
+| `/clients` | ClientListScreen | Yes / No | Tab 3 |
+| `/clients/new` | ClientFormScreen | Yes / No | Create mode |
+| `/clients/:id/edit` | ClientFormScreen | Yes / No | Edit mode |
+| `/company` | CompanyDetailScreen | Yes / No | Tab 4, read-only (online) / editable (offline) |
 
 ---
 
 ## 2.3 Screen Specifications
+
+### 2.3.0 Welcome Screen
+
+**Purpose:** First-launch mode selection. Allows user to choose between offline and online mode.
+
+**UI Elements:**
+
+- App logo (receipt icon) + "Invoice Generator" title centered
+- Subtitle: "Choose how you'd like to use the app"
+- "Use Offline" button (full width, outlined) — starts offline mode immediately, navigates to Dashboard
+- "Connect to Server" button (full width, filled primary) — navigates to Server Settings, then Login
+- Below buttons: if online mode was previously configured, show current server name + connection status indicator (green dot = reachable, red dot = unreachable)
+- App version at the bottom
+
+**Behavior:**
+
+1. Shown on first launch (when `app_mode` key not in SharedPreferences)
+2. Also accessible via Settings → "Switch Mode"
+3. "Use Offline" → save `app_mode=offline` → navigate to `/` (Dashboard, no auth required)
+4. "Connect to Server" → navigate to `/server-settings` → after server saved, navigate to `/login`
+5. If a mode is already saved, app skips Welcome and goes directly to the appropriate flow
+
+**No authentication** in offline mode.
 
 ### 2.3.1 Login Screen (S4-02)
 
@@ -489,10 +584,67 @@ Bottom Tab Bar Shell
 - "Bank Accounts" section: list of bank account cards showing bank name, IBAN, SWIFT, currency, default badge
 - No edit/delete actions (read-only per MO-05)
 
-**API Calls:**
+**API Calls (online mode):**
 
 - `GET /api/v1/companies`
 - `GET /api/v1/companies/{id}/bank-accounts`
+
+**Offline mode:** Full CRUD for companies and bank accounts via local SQLite.
+
+### 2.3.9 Server Settings Screen
+
+**Purpose:** Configure server connections for online mode.
+
+**UI Elements:**
+
+- App bar with title "Server Settings"
+- List of saved servers, each showing:
+  - Server name (e.g., "digitlock.systems")
+  - API URL
+  - Auth URL
+  - Connection status indicator (green/red dot)
+  - Radio button for active server selection
+- "Add Server" button → expands to form:
+  - Name text field (required)
+  - API URL text field (required, e.g., `https://invoice.digitlock.systems`)
+  - Auth URL text field (required, e.g., `https://expense.digitlock.systems`)
+  - "Test Connection" button — performs `GET /health` on API URL
+  - "Save" button
+- Swipe-to-delete on saved servers
+- Preset server: "digitlock.systems" pre-populated with production URLs
+
+**Storage:**
+
+- Server list persisted in `SharedPreferences` as JSON array
+- Active server ID stored separately
+- Selected server's API URL and Auth URL are used by `dioProvider` and `authDioProvider` base URLs
+
+**Behavior:**
+
+1. On first visit from Welcome Screen, the preset server is shown
+2. User can add custom servers (e.g., local dev `http://localhost:8081`)
+3. "Test Connection" hits `GET {apiUrl}/health` and shows success/failure
+4. Selecting a server updates the active Dio instances' base URLs
+5. Changes take effect immediately (providers are invalidated)
+
+### 2.3.10 Settings Screen
+
+**Purpose:** App-level settings and mode management.
+
+**UI Elements:**
+
+- App bar with title "Settings"
+- **Mode section:**
+  - Current mode display: "Offline Mode" or "Online Mode" with icon
+  - "Switch to Online/Offline" button → confirmation dialog → navigates to Welcome Screen
+- **Server section (visible only in online mode):**
+  - Current server name and URL
+  - "Server Settings" button → navigates to Server Settings screen
+- **About section:**
+  - App version
+  - "View SRS" link (opens documentation)
+
+**Access:** Settings icon in Dashboard app bar (gear icon), or via navigation.
 
 ---
 
@@ -500,7 +652,12 @@ Bottom Tab Bar Shell
 
 ### 2.4.1 API Client Configuration
 
-The API is accessed via the same domain as the web app, using the `/api/v1/` path prefix. The base URL is configured per environment (see section 5.2).
+**Online mode only.** The API is accessed using the `/api/v1/` path prefix. Two separate base URLs are used:
+
+- **API URL** — Invoice Generator backend (invoices, companies, clients, bank accounts)
+- **Auth URL** — Expense Tracker backend (login endpoint)
+
+API URLs are configurable via Server Settings (section 2.3.9), stored in `SharedPreferences`. Default values from `--dart-define=API_URL` and `--dart-define=AUTH_URL` are used as fallback when no server is configured.
 
 ```dart
 // Dio instance with base URL and JWT interceptor
@@ -561,23 +718,66 @@ final response = await dio.post('/clients', data: clientData);
 
 ---
 
-## 2.5 Offline Behavior
+## 2.5 Offline Mode
 
-### MVP: Online Only
+### 2.5.1 Local Database Schema
 
-The mobile app requires an active internet connection for all operations. No local caching or offline support is included in the MVP.
+Offline mode uses SQLite (via `sqflite`) with tables mirroring the server database:
 
-**Behavior when offline:**
+| Table | Columns | Notes |
+|-------|---------|-------|
+| `companies` | id (autoincrement), name, contact_person, address, phone, vat_number, reg_number, created_at, updated_at | Full CRUD in offline |
+| `clients` | id, name, contact_person, email, address, vat_number, reg_number, contract_reference, contract_notes, status, created_at, updated_at | Full CRUD |
+| `bank_accounts` | id, company_id (FK), bank_name, bank_address, account_holder, iban, swift, currency, is_default, created_at, updated_at | Full CRUD |
+| `invoices` | id, company_id (FK), client_id (FK), bank_account_id (FK), invoice_number, issue_date, due_date, currency, status, is_overdue, vat_rate, subtotal, vat_amount, total, contract_reference, external_reference, notes, created_at, updated_at | Full CRUD + status management |
+| `invoice_items` | id, invoice_id (FK), description, quantity, unit_price, total, created_at, updated_at | Managed as part of invoice |
 
-- API calls fail with network error
-- User sees "No internet connection" message with retry button
+### 2.5.2 Local Repository Implementations
+
+Each abstract repository interface (section 2.1.3) has a local SQLite implementation:
+
+- `LocalInvoiceRepository` — CRUD, status transitions, invoice number generation (local counter)
+- `LocalCompanyRepository` — Full CRUD (unlike online mode which is read-only)
+- `LocalClientRepository` — Full CRUD with status filter
+- `LocalBankAccountRepository` — CRUD by company
+
+Providers switch between Remote and Local implementations based on `appModeProvider`:
+
+```dart
+final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
+  final mode = ref.watch(appModeProvider);
+  if (mode == AppMode.offline) {
+    return LocalInvoiceRepository(db: ref.watch(databaseServiceProvider));
+  }
+  return RemoteInvoiceRepository(dio: ref.watch(dioProvider));
+});
+```
+
+### 2.5.3 Client-Side PDF Generation
+
+In offline mode, PDFs are generated on-device using the Dart `pdf` package:
+
+- Layout matches server-generated PDF format
+- Includes: company header, client details, line items table, totals, bank account details, notes
+- Saved to temporary directory, opened with system PDF viewer via `open_file`
+- `LocalPdfService` handles layout and generation
+
+### 2.5.4 Data Isolation
+
+- Offline and online data are **completely separate** — no synchronization
+- Offline data persists in SQLite on the device
+- Online data lives on the configured server
+- Switching modes does not affect either data store
+- Future enhancement: optional export/import between modes
+
+### 2.5.5 Online Mode — Network Errors
+
+When in online mode and the network is unavailable:
+
+- API calls fail with "No internet connection" error
+- User sees error message with retry button
 - No data is cached locally (except JWT token and user preferences)
-
-**Future roadmap:**
-
-- Local SQLite cache for recently viewed invoices (read-only offline)
-- Background sync for status changes made offline
-- Optimistic UI updates with conflict resolution
+- App does not fall back to offline mode automatically
 
 ---
 
@@ -772,4 +972,9 @@ flutter analyze                                        # Static analysis
 | MO-02 | View invoice history | Filterable, scrollable invoice list |
 | MO-03 | Change invoice status | Bottom sheet with valid transitions, confirmation dialog |
 | MO-04 | Manage clients | Create, edit, change status; no delete |
-| MO-05 | Company read-only | Company/bank account info displayed, no edit/delete buttons |
+| MO-05 | Company read-only | Company/bank account info displayed, no edit/delete buttons (online mode) |
+| OFF-01 | Offline mode | User can create/manage invoices without server connection |
+| OFF-02 | Local PDF generation | PDF generated on device matches server format |
+| OFF-03 | Mode selection | Welcome screen allows choosing offline/online, persisted across restarts |
+| OFF-04 | Server settings | User can add, test, and switch between multiple server configurations |
+| OFF-05 | Settings screen | User can view current mode, switch modes, access server settings |
