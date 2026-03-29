@@ -64,7 +64,9 @@ class LocalPdfService {
         ),
         pw.SizedBox(height: 2),
         pw.Text(
-          'Issue Date: ${invoice.issueDate}  |  Due Date: ${invoice.dueDate}',
+          invoice.dueDate != null && invoice.dueDate!.isNotEmpty
+              ? 'Issue Date: ${invoice.issueDate}  |  Due Date: ${invoice.dueDate}'
+              : 'Issue Date: ${invoice.issueDate}',
           style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
         ),
         if (refs.isNotEmpty) ...[
