@@ -57,12 +57,19 @@ class _DetailScaffold extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: context.canPop()
+            ? const BackButton()
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.go('/'),
+              ),
         title: Text(invoice.invoiceNumber),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) => _onMenuAction(context, ref, v),
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'edit', child: Text('Edit')),
+              const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
               const PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],
           ),
@@ -92,6 +99,13 @@ class _DetailScaffold extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
+                  Expanded(
+                    child: FilledButton.tonal(
+                      onPressed: () => _downloadPdf(context, ref),
+                      child: const Text('Download PDF'),
+                    ),
+                  ),
+                  if (transitions.isNotEmpty) const SizedBox(width: 8),
                   if (transitions.isNotEmpty)
                     Expanded(
                       child: FilledButton.tonal(
@@ -100,13 +114,6 @@ class _DetailScaffold extends ConsumerWidget {
                         child: const Text('Change Status'),
                       ),
                     ),
-                  if (transitions.isNotEmpty) const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.tonal(
-                      onPressed: () => _downloadPdf(context, ref),
-                      child: const Text('Download PDF'),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -124,7 +131,8 @@ class _DetailScaffold extends ConsumerWidget {
             // Dates
             _SectionTitle('Dates'),
             _InfoRow('Issue Date', _formatDate(invoice.issueDate)),
-            _InfoRow('Due Date', _formatDate(invoice.dueDate)),
+            if (invoice.dueDate != null && invoice.dueDate!.isNotEmpty)
+              _InfoRow('Due Date', _formatDate(invoice.dueDate!)),
             if (invoice.contractReference != null)
               _InfoRow('Contract Ref', invoice.contractReference!),
             if (invoice.externalReference != null)
@@ -207,6 +215,8 @@ class _DetailScaffold extends ConsumerWidget {
   void _onMenuAction(BuildContext context, WidgetRef ref, String action) {
     if (action == 'edit') {
       context.push('/invoices/$invoiceId/edit');
+    } else if (action == 'duplicate') {
+      context.push('/invoices/new', extra: invoice);
     } else if (action == 'delete') {
       _confirmDelete(context, ref);
     }

@@ -19,9 +19,10 @@ import '../widgets/loading_indicator.dart';
 import '../widgets/error_view.dart';
 
 class InvoiceFormScreen extends ConsumerStatefulWidget {
-  const InvoiceFormScreen({super.key, this.invoiceId});
+  const InvoiceFormScreen({super.key, this.invoiceId, this.duplicateFrom});
 
   final String? invoiceId;
+  final Invoice? duplicateFrom;
 
   @override
   ConsumerState<InvoiceFormScreen> createState() => _InvoiceFormScreenState();
@@ -40,7 +41,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   // Invoice details
   final _invoiceNumberController = TextEditingController();
   DateTime _issueDate = DateTime.now();
-  DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
+  DateTime? _dueDate;
   String _currency = 'EUR';
   final _vatRateController = TextEditingController(text: '0');
   final _contractRefController = TextEditingController();
@@ -52,6 +53,44 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
 
   bool get isEditing => widget.invoiceId != null;
   int get _editId => int.parse(widget.invoiceId!);
+
+  @override
+  void initState() {
+    super.initState();
+    final date = DateFormat('ddMMyyyy').format(DateTime.now());
+    final newNumber = 'INV-$date-${DateTime.now().millisecondsSinceEpoch % 1000}';
+
+    if (widget.duplicateFrom != null) {
+      _populateDuplicate(widget.duplicateFrom!, newNumber);
+    } else if (!isEditing) {
+      _invoiceNumberController.text = newNumber;
+    }
+  }
+
+  void _populateDuplicate(Invoice inv, String newNumber) {
+    _initialized = true;
+    _companyId = inv.companyId;
+    _clientId = inv.clientId;
+    _bankAccountId = inv.bankAccountId;
+    _invoiceNumberController.text = newNumber;
+    _issueDate = DateTime.now();
+    _dueDate = (inv.dueDate != null && inv.dueDate!.isNotEmpty) ? DateTime.tryParse(inv.dueDate!) : null;
+    _currency = inv.currency;
+    _vatRateController.text = inv.vatRate;
+    _contractRefController.text = inv.contractReference ?? '';
+    _externalRefController.text = inv.externalReference ?? '';
+    _notesController.text = inv.notes ?? '';
+
+    _items.clear();
+    for (final item in inv.items) {
+      _items.add(LineItemData(
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      ));
+    }
+    if (_items.isEmpty) _items.add(LineItemData());
+  }
 
   @override
   void dispose() {
@@ -82,7 +121,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     _bankAccountId = inv.bankAccountId;
     _invoiceNumberController.text = inv.invoiceNumber;
     _issueDate = DateTime.tryParse(inv.issueDate) ?? DateTime.now();
-    _dueDate = DateTime.tryParse(inv.dueDate) ?? DateTime.now();
+    _dueDate = inv.dueDate != null ? DateTime.tryParse(inv.dueDate!) : null;
     _currency = inv.currency;
     _vatRateController.text = inv.vatRate;
     _contractRefController.text = inv.contractReference ?? '';
@@ -101,7 +140,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   }
 
   Future<void> _pickDate(BuildContext context, bool isIssueDate) async {
-    final initial = isIssueDate ? _issueDate : _dueDate;
+    final initial = isIssueDate ? _issueDate : (_dueDate ?? _issueDate);
     final first = isIssueDate ? DateTime(2020) : _issueDate;
     final picked = await showDatePicker(
       context: context,
@@ -113,7 +152,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
       setState(() {
         if (isIssueDate) {
           _issueDate = picked;
-          if (_dueDate.isBefore(_issueDate)) _dueDate = _issueDate;
+          if (_dueDate != null && _dueDate!.isBefore(_issueDate)) _dueDate = _issueDate;
         } else {
           _dueDate = picked;
         }
@@ -127,7 +166,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
       showErrorSnackbar(context, 'Please select company, client, and bank account');
       return;
     }
-
     setState(() => _isLoading = true);
 
     final payload = <String, dynamic>{
@@ -135,7 +173,8 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
       'client_id': _clientId,
       'bank_account_id': _bankAccountId,
       'issue_date': DateFormat('yyyy-MM-dd').format(_issueDate),
-      'due_date': DateFormat('yyyy-MM-dd').format(_dueDate),
+      if (_dueDate != null)
+        'due_date': DateFormat('yyyy-MM-dd').format(_dueDate!),
       'currency': _currency,
       'vat_rate': _vatRateController.text,
       'items': _items.map((i) => i.toJson()).toList(),
@@ -151,23 +190,28 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
       payload['notes'] = _notesController.text;
     }
 
-    if (isEditing) {
-      payload['invoice_number'] = _invoiceNumberController.text;
-    }
+    payload['invoice_number'] = _invoiceNumberController.text;
 
     try {
       final repo = ref.read(invoiceRepositoryProvider);
       if (isEditing) {
         await repo.update(_editId, payload);
+        ref.invalidate(invoiceListProvider);
+        ref.invalidate(invoiceDetailProvider(_editId));
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          showSuccessSnackbar(context, 'Invoice updated');
+          context.pop();
+        }
       } else {
-        await repo.create(payload);
-      }
-      ref.invalidate(invoiceListProvider);
-      if (isEditing) ref.invalidate(invoiceDetailProvider(_editId));
-      if (mounted) {
-        HapticFeedback.mediumImpact();
-        showSuccessSnackbar(context, isEditing ? 'Invoice updated' : 'Invoice created');
-        context.pop();
+        final created = await repo.create(payload);
+        ref.invalidate(invoiceListProvider);
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          showSuccessSnackbar(context, 'Invoice created');
+          context.pop();
+          context.push('/invoices/${created.id}');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -242,32 +286,37 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               child: companies.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Error loading companies: $e'),
-                data: (list) => Column(
+                data: (list) => Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DropdownButtonFormField<int>(
-                      value: _companyId,
-                      decoration: const InputDecoration(labelText: 'Company'),
-                      items: list
-                          .map((c) => DropdownMenuItem(
-                              value: c.id, child: Text(c.name)))
-                          .toList(),
-                      onChanged: (v) {
-                        setState(() {
-                          _companyId = v;
-                          _bankAccountId = null;
-                        });
-                      },
-                      validator: (v) => v == null ? 'Required' : null,
-                    ),
-                    if (list.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4, left: 4),
-                        child: Text(
-                          'No companies yet — create one in Company tab',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                        ),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _companyId,
+                        decoration: const InputDecoration(labelText: 'Company'),
+                        items: list
+                            .map((c) => DropdownMenuItem(
+                                value: c.id, child: Text(c.name)))
+                            .toList(),
+                        onChanged: (v) {
+                          setState(() {
+                            _companyId = v;
+                            _bankAccountId = null;
+                          });
+                        },
+                        validator: (v) => v == null ? 'Required' : null,
                       ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        tooltip: 'New Company',
+                        onPressed: () async {
+                          await context.push('/company/new');
+                          if (mounted) ref.invalidate(companyListProvider);
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -279,27 +328,32 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               child: clients.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Error loading clients: $e'),
-                data: (list) => Column(
+                data: (list) => Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DropdownButtonFormField<int>(
-                      value: _clientId,
-                      decoration: const InputDecoration(labelText: 'Client'),
-                      items: list
-                          .map((c) => DropdownMenuItem(
-                              value: c.id, child: Text(c.name)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _clientId = v),
-                      validator: (v) => v == null ? 'Required' : null,
-                    ),
-                    if (list.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4, left: 4),
-                        child: Text(
-                          'No active clients yet — create one in Clients tab',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                        ),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _clientId,
+                        decoration: const InputDecoration(labelText: 'Client'),
+                        items: list
+                            .map((c) => DropdownMenuItem(
+                                value: c.id, child: Text(c.name)))
+                            .toList(),
+                        onChanged: (v) => setState(() => _clientId = v),
+                        validator: (v) => v == null ? 'Required' : null,
                       ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        tooltip: 'New Client',
+                        onPressed: () async {
+                          await context.push('/clients/new');
+                          if (mounted) ref.invalidate(clientListProvider('active'));
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -313,17 +367,39 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                 child: bankAccounts.when(
                   loading: () => const LinearProgressIndicator(),
                   error: (e, _) => Text('Error: $e'),
-                  data: (list) => DropdownButtonFormField<int>(
-                    value: _bankAccountId,
-                    decoration:
-                        const InputDecoration(labelText: 'Bank Account'),
-                    items: list
-                        .map((b) => DropdownMenuItem(
-                            value: b.id,
-                            child: Text('${b.bankName} (${b.currency})')))
-                        .toList(),
-                    onChanged: (v) => setState(() => _bankAccountId = v),
-                    validator: (v) => v == null ? 'Required' : null,
+                  data: (list) => Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: _bankAccountId,
+                          decoration:
+                              const InputDecoration(labelText: 'Bank Account'),
+                          items: list
+                              .map((b) => DropdownMenuItem(
+                                  value: b.id,
+                                  child: Text('${b.bankName} (${b.currency})')))
+                              .toList(),
+                          onChanged: (v) => setState(() => _bankAccountId = v),
+                          validator: (v) => v == null ? 'Required' : null,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          tooltip: 'New Bank Account',
+                          onPressed: () async {
+                            await context.push(
+                                '/company/$_companyId/bank-accounts/new');
+                            if (mounted) {
+                              ref.invalidate(
+                                  bankAccountListProvider(_companyId!));
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -337,18 +413,8 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               child: TextFormField(
                 controller: _invoiceNumberController,
                 decoration: const InputDecoration(labelText: 'Invoice Number'),
-                enabled: isEditing,
-                readOnly: !isEditing,
               ),
             ),
-            if (!isEditing)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Auto-generated on save',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                ),
-              ),
 
             // Dates
             Padding(
@@ -364,10 +430,27 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _DateField(
-                      label: 'Due Date',
-                      date: _dueDate,
+                    child: InkWell(
                       onTap: () => _pickDate(context, false),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Due Date',
+                          suffixIcon: _dueDate != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () =>
+                                      setState(() => _dueDate = null),
+                                )
+                              : null,
+                        ),
+                        child: _dueDate != null
+                            ? Text(DateFormat('dd MMM yyyy').format(_dueDate!))
+                            : Text('Select date',
+                                style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant)),
+                      ),
                     ),
                   ),
                 ],
@@ -507,7 +590,7 @@ class _DateField extends StatelessWidget {
   });
 
   final String label;
-  final DateTime date;
+  final DateTime? date;
   final VoidCallback onTap;
 
   @override
@@ -516,7 +599,12 @@ class _DateField extends StatelessWidget {
       onTap: onTap,
       child: InputDecorator(
         decoration: InputDecoration(labelText: label),
-        child: Text(DateFormat('dd MMM yyyy').format(date)),
+        child: date != null
+            ? Text(DateFormat('dd MMM yyyy').format(date!))
+            : Text(
+                'Select date',
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
       ),
     );
   }

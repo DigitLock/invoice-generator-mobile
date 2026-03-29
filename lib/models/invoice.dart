@@ -11,7 +11,7 @@ class Invoice {
   final int clientId;
   final int bankAccountId;
   final String issueDate;
-  final String dueDate;
+  final String? dueDate;
   final String currency;
   final String status;
   final bool isOverdue;
@@ -68,7 +68,7 @@ class Invoice {
       clientId: json['client_id'] as int,
       bankAccountId: json['bank_account_id'] as int,
       issueDate: json['issue_date'] as String,
-      dueDate: json['due_date'] as String,
+      dueDate: json['due_date'] as String?,
       currency: json['currency'] as String,
       status: json['status'] as String,
       isOverdue: json['is_overdue'] as bool,
@@ -143,7 +143,7 @@ class InvoiceListItem {
   final int id;
   final String invoiceNumber;
   final String issueDate;
-  final String dueDate;
+  final String? dueDate;
   final String status;
   final bool isOverdue;
   final String currency;
@@ -179,7 +179,7 @@ class InvoiceListItem {
       id: json['id'] as int,
       invoiceNumber: json['invoice_number'] as String,
       issueDate: json['issue_date'] as String,
-      dueDate: json['due_date'] as String,
+      dueDate: json['due_date'] as String?,
       status: json['status'] as String,
       isOverdue: json['is_overdue'] as bool,
       currency: json['currency'] as String,

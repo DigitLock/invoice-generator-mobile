@@ -17,7 +17,7 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final appMode = ref.watch(appModeProvider);
+    final appMode = ref.watch(appModeProvider).mode;
     final isOnline = appMode == AppMode.online;
 
     // In online mode, wait for auth before fetching

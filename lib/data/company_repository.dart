@@ -10,7 +10,7 @@ import 'local/local_company_repository.dart';
 export 'repositories/company_repository.dart';
 
 final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
-  final mode = ref.watch(appModeProvider);
+  final mode = ref.watch(appModeProvider).mode;
   if (mode == AppMode.offline) {
     final dbAsync = ref.watch(databaseServiceProvider);
     return dbAsync.whenOrNull(data: (db) => LocalCompanyRepository(db: db))

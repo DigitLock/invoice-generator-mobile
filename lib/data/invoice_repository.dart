@@ -11,7 +11,7 @@ import 'local/local_invoice_repository.dart';
 export 'repositories/invoice_repository.dart';
 
 final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
-  final mode = ref.watch(appModeProvider);
+  final mode = ref.watch(appModeProvider).mode;
   if (mode == AppMode.offline) {
     final dbAsync = ref.watch(databaseServiceProvider);
     final pdfService = ref.watch(localPdfServiceProvider);

@@ -24,7 +24,7 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isOffline = ref.watch(appModeProvider) == AppMode.offline;
+    final isOffline = ref.watch(appModeProvider).mode == AppMode.offline;
     final isOnline = !isOffline;
 
     if (isOnline) {
@@ -135,7 +135,7 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
           );
         },
       ),
-      floatingActionButton: (ref.watch(appModeProvider) == AppMode.offline)
+      floatingActionButton: (ref.watch(appModeProvider).mode == AppMode.offline)
           ? FloatingActionButton(
               onPressed: () => context.push('/company/new'),
               child: const Icon(Icons.add),

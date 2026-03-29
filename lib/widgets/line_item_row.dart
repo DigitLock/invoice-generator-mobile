@@ -8,7 +8,7 @@ class LineItemData {
   LineItemData({
     this.description = '',
     this.quantity = '1',
-    this.unitPrice = '0.00',
+    this.unitPrice = '',
   });
 
   double get total {
@@ -19,8 +19,8 @@ class LineItemData {
 
   Map<String, dynamic> toJson() => {
         'description': description,
-        'quantity': quantity,
-        'unit_price': unitPrice,
+        'quantity': quantity.isEmpty ? '1' : quantity,
+        'unit_price': unitPrice.isEmpty ? '0' : unitPrice,
       };
 }
 
@@ -119,6 +119,7 @@ class LineItemRow extends StatelessWidget {
                       initialValue: item.unitPrice,
                       decoration: const InputDecoration(
                         labelText: 'Unit Price',
+                        hintText: '0.00',
                         isDense: true,
                       ),
                       keyboardType:

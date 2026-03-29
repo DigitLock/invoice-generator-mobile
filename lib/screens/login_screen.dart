@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../providers/app_mode_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/server_config_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -144,18 +145,58 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ],
                   const SizedBox(height: 24),
                   TextButton(
-                    onPressed: () {
-                      ref.read(appModeProvider.notifier).clear();
-                      context.go('/welcome');
+                    onPressed: () async {
+                      await ref.read(appModeProvider.notifier).clear();
+                      if (context.mounted) context.go('/welcome');
                     },
                     child: const Text('\u2190 Choose different mode'),
                   ),
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  _ServerInfo(),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ServerInfo extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final active = ref.watch(serverConfigProvider).activeServer;
+    final theme = Theme.of(context);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.link, size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            active != null
+                ? 'Connected to: ${active.name}'
+                : 'Using default server',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        TextButton(
+          onPressed: () => context.push('/server-settings'),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(active != null ? 'Change' : 'Configure'),
+        ),
+      ],
     );
   }
 }

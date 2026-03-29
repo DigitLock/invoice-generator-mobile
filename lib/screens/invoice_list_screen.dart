@@ -138,7 +138,7 @@ class _InvoiceListScreenState extends ConsumerState<InvoiceListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = ref.watch(appModeProvider) == AppMode.online;
+    final isOnline = ref.watch(appModeProvider).mode == AppMode.online;
     if (isOnline) {
       final authState = ref.watch(authProvider);
       if (authState.status != AuthStatus.authenticated) {

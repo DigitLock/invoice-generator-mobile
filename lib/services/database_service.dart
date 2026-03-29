@@ -67,7 +67,7 @@ final databaseServiceProvider = FutureProvider<Database>((ref) async {
           bank_account_id INTEGER NOT NULL,
           invoice_number TEXT NOT NULL,
           issue_date TEXT NOT NULL,
-          due_date TEXT NOT NULL,
+          due_date TEXT,
           currency TEXT NOT NULL DEFAULT 'EUR',
           status TEXT NOT NULL DEFAULT 'draft',
           is_overdue INTEGER NOT NULL DEFAULT 0,

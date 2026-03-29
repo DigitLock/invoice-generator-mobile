@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/invoice.dart';
 import '../providers/app_mode_provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/welcome_screen.dart';
@@ -27,8 +28,15 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     refreshListenable: notifier,
     redirect: (context, state) {
-      final appMode = ref.read(appModeProvider);
+      final appModeState = ref.read(appModeProvider);
       final path = state.uri.path;
+
+      // Still loading saved mode from SharedPreferences — show splash
+      if (!appModeState.isLoaded) {
+        return path == '/splash' ? null : '/splash';
+      }
+
+      final appMode = appModeState.mode;
 
       // First launch — mode not chosen yet
       if (appMode == null) {
@@ -109,7 +117,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/invoices/new',
-        builder: (context, state) => const InvoiceFormScreen(),
+        builder: (context, state) => InvoiceFormScreen(
+          duplicateFrom: state.extra as Invoice?,
+        ),
       ),
       GoRoute(
         path: '/invoices/:id',

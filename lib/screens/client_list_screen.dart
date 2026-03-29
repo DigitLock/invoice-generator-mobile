@@ -35,7 +35,7 @@ class _ClientListScreenState extends ConsumerState<ClientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = ref.watch(appModeProvider) == AppMode.online;
+    final isOnline = ref.watch(appModeProvider).mode == AppMode.online;
     if (isOnline) {
       final authState = ref.watch(authProvider);
       if (authState.status != AuthStatus.authenticated) {

@@ -11,7 +11,7 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final appMode = ref.watch(appModeProvider);
+    final appMode = ref.watch(appModeProvider).mode;
     final theme = Theme.of(context);
     final isOffline = appMode == AppMode.offline;
 
@@ -126,10 +126,10 @@ class SettingsScreen extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
-              ref.read(appModeProvider.notifier).clear();
-              context.go('/welcome');
+              await ref.read(appModeProvider.notifier).clear();
+              if (context.mounted) context.go('/welcome');
             },
             child: const Text('Switch'),
           ),

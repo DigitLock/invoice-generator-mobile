@@ -10,7 +10,7 @@ import 'local/local_bank_account_repository.dart';
 export 'repositories/bank_account_repository.dart';
 
 final bankAccountRepositoryProvider = Provider<BankAccountRepository>((ref) {
-  final mode = ref.watch(appModeProvider);
+  final mode = ref.watch(appModeProvider).mode;
   if (mode == AppMode.offline) {
     final dbAsync = ref.watch(databaseServiceProvider);
     return dbAsync.whenOrNull(data: (db) => LocalBankAccountRepository(db: db))

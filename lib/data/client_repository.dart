@@ -10,7 +10,7 @@ import 'local/local_client_repository.dart';
 export 'repositories/client_repository.dart';
 
 final clientRepositoryProvider = Provider<ClientRepository>((ref) {
-  final mode = ref.watch(appModeProvider);
+  final mode = ref.watch(appModeProvider).mode;
   if (mode == AppMode.offline) {
     final dbAsync = ref.watch(databaseServiceProvider);
     return dbAsync.whenOrNull(data: (db) => LocalClientRepository(db: db))

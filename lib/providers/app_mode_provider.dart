@@ -5,35 +5,46 @@ enum AppMode { offline, online }
 
 const _key = 'app_mode';
 
-class AppModeNotifier extends StateNotifier<AppMode?> {
-  AppModeNotifier() : super(null) {
+class AppModeState {
+  final AppMode? mode;
+  final bool isLoaded;
+
+  const AppModeState({this.mode, this.isLoaded = false});
+}
+
+class AppModeNotifier extends StateNotifier<AppModeState> {
+  AppModeNotifier() : super(const AppModeState()) {
     _load();
   }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getString(_key);
+    AppMode? mode;
     if (value == 'offline') {
-      state = AppMode.offline;
+      mode = AppMode.offline;
     } else if (value == 'online') {
-      state = AppMode.online;
+      mode = AppMode.online;
     }
-    // null = not set yet (first launch)
+    if (mounted) {
+      state = AppModeState(mode: mode, isLoaded: true);
+    }
   }
 
   Future<void> setMode(AppMode mode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, mode.name);
-    state = mode;
+    state = AppModeState(mode: mode, isLoaded: true);
   }
 
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_key);
-    state = null;
+    state = const AppModeState(mode: null, isLoaded: true);
   }
 }
 
-final appModeProvider = StateNotifierProvider<AppModeNotifier, AppMode?>((ref) {
+final appModeProvider =
+    StateNotifierProvider<AppModeNotifier, AppModeState>((ref) {
   return AppModeNotifier();
 });
