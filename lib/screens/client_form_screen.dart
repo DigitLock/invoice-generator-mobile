@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/client_repository.dart';
+import '../models/client.dart';
 import '../providers/client_provider.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/error_view.dart';
@@ -21,7 +22,10 @@ class ClientFormScreen extends ConsumerStatefulWidget {
 class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  bool _initialized = false;
+
+  // Edit mode: loading state for initial fetch
+  bool _isFetchingClient = false;
+  String? _fetchError;
 
   final _nameController = TextEditingController();
   final _contactPersonController = TextEditingController();
@@ -37,6 +41,35 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
   int get _editId => int.parse(widget.clientId!);
 
   @override
+  void initState() {
+    super.initState();
+    if (isEditing) {
+      _loadClient();
+    }
+  }
+
+  Future<void> _loadClient() async {
+    setState(() {
+      _isFetchingClient = true;
+      _fetchError = null;
+    });
+
+    try {
+      final client =
+          await ref.read(clientRepositoryProvider).getById(_editId);
+      if (!mounted) return;
+      _populateFromClient(client);
+      setState(() => _isFetchingClient = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isFetchingClient = false;
+        _fetchError = e.toString();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _contactPersonController.dispose();
@@ -49,9 +82,7 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
     super.dispose();
   }
 
-  void _populateFromClient(dynamic client) {
-    if (_initialized) return;
-    _initialized = true;
+  void _populateFromClient(Client client) {
     _nameController.text = client.name;
     _contactPersonController.text = client.contactPerson ?? '';
     _emailController.text = client.email ?? '';
@@ -94,7 +125,8 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
       ref.invalidate(clientListProvider);
       if (mounted) {
         HapticFeedback.mediumImpact();
-        showSuccessSnackbar(context, isEditing ? 'Client updated' : 'Client created');
+        showSuccessSnackbar(
+            context, isEditing ? 'Client updated' : 'Client created');
         context.pop();
       }
     } catch (e) {
@@ -108,26 +140,23 @@ class _ClientFormScreenState extends ConsumerState<ClientFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (isEditing && !_initialized) {
-      final clientAsync = ref.watch(clientDetailProvider(_editId));
-      return clientAsync.when(
-        loading: () => Scaffold(
-          appBar: AppBar(title: const Text('Edit Client')),
-          body: const LoadingIndicator(),
-        ),
-        error: (e, _) => Scaffold(
-          appBar: AppBar(title: const Text('Edit Client')),
-          body: ErrorView(
-            message: e.toString(),
-            onRetry: () => ref.invalidate(clientDetailProvider(_editId)),
-          ),
-        ),
-        data: (client) {
-          _populateFromClient(client);
-          return _buildForm();
-        },
+    if (_isFetchingClient) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Client')),
+        body: const LoadingIndicator(),
       );
     }
+
+    if (_fetchError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Client')),
+        body: ErrorView(
+          message: _fetchError!,
+          onRetry: _loadClient,
+        ),
+      );
+    }
+
     return _buildForm();
   }
 

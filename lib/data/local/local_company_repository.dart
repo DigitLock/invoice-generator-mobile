@@ -53,6 +53,12 @@ class LocalCompanyRepository implements CompanyRepository {
     return getById(id);
   }
 
+  @override
+  Future<void> delete(int id) async {
+    await _db.delete('bank_accounts', where: 'company_id = ?', whereArgs: [id]);
+    await _db.delete('companies', where: 'id = ?', whereArgs: [id]);
+  }
+
   Company _fromRow(Map<String, dynamic> row) {
     return Company(
       id: row['id'] as int,

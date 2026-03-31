@@ -29,4 +29,8 @@ class RemoteCompanyRepository implements CompanyRepository {
   @override
   Future<Company> update(int id, Map<String, dynamic> data) =>
       throw UnimplementedError('Company editing is read-only in online mode');
+
+  @override
+  Future<void> delete(int id) =>
+      throw UnimplementedError('Company deletion is read-only in online mode');
 }

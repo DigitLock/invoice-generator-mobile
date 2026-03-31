@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../data/company_repository.dart';
+import '../data/bank_account_repository.dart';
 import '../models/company.dart';
 import '../models/bank_account.dart';
 import '../providers/app_mode_provider.dart';
@@ -10,6 +13,7 @@ import '../providers/company_provider.dart';
 import '../providers/bank_account_provider.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/error_view.dart';
+import '../widgets/snackbar_helper.dart';
 
 class CompanyDetailScreen extends ConsumerStatefulWidget {
   const CompanyDetailScreen({super.key});
@@ -105,6 +109,9 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
                 _CompanyInfoCard(
                   company: company,
                   showEdit: isOffline,
+                  onDelete: isOffline
+                      ? () => _confirmDeleteCompany(context, company)
+                      : null,
                 ),
 
                 Padding(
@@ -129,7 +136,10 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
                   ),
                 ),
 
-                _BankAccountsList(companyId: company.id),
+                _BankAccountsList(
+                  companyId: company.id,
+                  allowDelete: isOffline,
+                ),
               ],
             ),
           );
@@ -143,13 +153,54 @@ class _CompanyDetailScreenState extends ConsumerState<CompanyDetailScreen> {
           : null,
     );
   }
+
+  void _confirmDeleteCompany(BuildContext context, Company company) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Company'),
+        content: Text('Delete "${company.name}" and all its bank accounts?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                await ref.read(companyRepositoryProvider).delete(company.id);
+                ref.invalidate(companyListProvider);
+                if (mounted) {
+                  HapticFeedback.mediumImpact();
+                  showSuccessSnackbar(context, 'Company deleted');
+                  setState(() => _selectedCompanyId = null);
+                }
+              } catch (e) {
+                if (mounted) showErrorSnackbar(context, 'Delete failed: $e');
+              }
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CompanyInfoCard extends StatelessWidget {
-  const _CompanyInfoCard({required this.company, this.showEdit = false});
+  const _CompanyInfoCard({
+    required this.company,
+    this.showEdit = false,
+    this.onDelete,
+  });
 
   final Company company;
   final bool showEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -174,6 +225,12 @@ class _CompanyInfoCard extends StatelessWidget {
                     icon: const Icon(Icons.edit_outlined, size: 20),
                     onPressed: () =>
                         context.push('/company/${company.id}/edit'),
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, size: 20,
+                        color: theme.colorScheme.error),
+                    onPressed: onDelete,
                   ),
               ],
             ),
@@ -217,9 +274,13 @@ class _Row extends StatelessWidget {
 }
 
 class _BankAccountsList extends ConsumerWidget {
-  const _BankAccountsList({required this.companyId});
+  const _BankAccountsList({
+    required this.companyId,
+    this.allowDelete = false,
+  });
 
   final int companyId;
+  final bool allowDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -243,18 +304,73 @@ class _BankAccountsList extends ConsumerWidget {
         }
         return Column(
           children: list
-              .map((account) => _BankAccountCard(account: account))
+              .map((account) => _BankAccountCard(
+                    account: account,
+                    onEdit: allowDelete
+                        ? () => context.push(
+                            '/company/$companyId/bank-accounts/${account.id}/edit')
+                        : null,
+                    onDelete: allowDelete
+                        ? () => _confirmDelete(context, ref, account)
+                        : null,
+                  ))
               .toList(),
         );
       },
     );
   }
+
+  void _confirmDelete(
+      BuildContext context, WidgetRef ref, BankAccount account) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Bank Account'),
+        content: Text('Delete "${account.bankName}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                await ref
+                    .read(bankAccountRepositoryProvider)
+                    .delete(account.id);
+                ref.invalidate(bankAccountListProvider(companyId));
+                HapticFeedback.mediumImpact();
+                if (context.mounted) {
+                  showSuccessSnackbar(context, 'Bank account deleted');
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  showErrorSnackbar(context, 'Delete failed: $e');
+                }
+              }
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BankAccountCard extends StatelessWidget {
-  const _BankAccountCard({required this.account});
+  const _BankAccountCard({
+    required this.account,
+    this.onEdit,
+    this.onDelete,
+  });
 
   final BankAccount account;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -285,6 +401,17 @@ class _BankAccountCard extends StatelessWidget {
                     child: Text('Default',
                         style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onPrimaryContainer)),
+                  ),
+                if (onEdit != null)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    onPressed: onEdit,
+                  ),
+                if (onDelete != null)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, size: 20,
+                        color: theme.colorScheme.error),
+                    onPressed: onDelete,
                   ),
               ],
             ),

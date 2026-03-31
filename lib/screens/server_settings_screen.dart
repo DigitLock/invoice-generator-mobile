@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import '../models/server_config.dart';
 import '../providers/app_mode_provider.dart';
-import '../providers/auth_provider.dart';
 import '../providers/server_config_provider.dart';
 import '../widgets/snackbar_helper.dart';
 
@@ -120,11 +119,10 @@ class _ServerSettingsScreenState extends ConsumerState<ServerSettingsScreen> {
         authUrl: _cleanUrl(_authUrlController.text),
       );
       await notifier.addServer(updated);
-      // If this was the active server, re-select and logout
+      // If this was the active server, re-select it
       final configState = ref.read(serverConfigProvider);
       if (configState.activeServerId == _editingServerId) {
         await notifier.setActive(_editingServerId!);
-        _logoutIfOnline();
       }
       if (mounted) showSuccessSnackbar(context, 'Server updated');
     } else {
@@ -144,21 +142,12 @@ class _ServerSettingsScreenState extends ConsumerState<ServerSettingsScreen> {
     final notifier = ref.read(serverConfigProvider.notifier);
     await notifier.addServer(ServerConfig.preset);
     await notifier.setActive(ServerConfig.preset.id);
-    _logoutIfOnline();
   }
 
   void _selectServer(String id) {
     final currentActive = ref.read(serverConfigProvider).activeServerId;
     if (currentActive == id) return;
     ref.read(serverConfigProvider.notifier).setActive(id);
-    _logoutIfOnline();
-  }
-
-  void _logoutIfOnline() {
-    final appMode = ref.read(appModeProvider).mode;
-    if (appMode == AppMode.online) {
-      ref.read(authProvider.notifier).logout();
-    }
   }
 
   void _connectAndGo() {

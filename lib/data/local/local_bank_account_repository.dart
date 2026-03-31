@@ -36,6 +36,36 @@ class LocalBankAccountRepository implements BankAccountRepository {
     return _fromRow(rows.first);
   }
 
+  @override
+  Future<BankAccount> getById(int id) async {
+    final rows =
+        await _db.query('bank_accounts', where: 'id = ?', whereArgs: [id]);
+    if (rows.isEmpty) throw Exception('Bank account not found');
+    return _fromRow(rows.first);
+  }
+
+  @override
+  Future<BankAccount> update(int id, Map<String, dynamic> data) async {
+    final now = DateTime.now().toIso8601String();
+    final row = {
+      'bank_name': data['bank_name'],
+      'bank_address': data['bank_address'] ?? '',
+      'account_holder': data['account_holder'] ?? '',
+      'iban': data['iban'],
+      'swift': data['swift'],
+      'currency': data['currency'] ?? 'EUR',
+      'is_default': (data['is_default'] == true) ? 1 : 0,
+      'updated_at': now,
+    };
+    await _db.update('bank_accounts', row, where: 'id = ?', whereArgs: [id]);
+    return getById(id);
+  }
+
+  @override
+  Future<void> delete(int id) async {
+    await _db.delete('bank_accounts', where: 'id = ?', whereArgs: [id]);
+  }
+
   BankAccount _fromRow(Map<String, dynamic> row) {
     return BankAccount(
       id: row['id'] as int,

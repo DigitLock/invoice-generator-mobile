@@ -91,8 +91,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repository.logout();
-    _invalidateDataProviders();
     state = const AuthState(status: AuthStatus.unauthenticated);
+    // Defer invalidation to next microtask to avoid concurrent modification
+    // when provider listeners fire during iteration.
+    Future.microtask(_invalidateDataProviders);
   }
 
   void _invalidateDataProviders() {

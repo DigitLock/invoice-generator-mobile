@@ -5,12 +5,19 @@ import 'package:go_router/go_router.dart';
 
 import '../data/bank_account_repository.dart';
 import '../providers/bank_account_provider.dart';
+import '../widgets/loading_indicator.dart';
+import '../widgets/error_view.dart';
 import '../widgets/snackbar_helper.dart';
 
 class BankAccountFormScreen extends ConsumerStatefulWidget {
-  const BankAccountFormScreen({super.key, required this.companyId});
+  const BankAccountFormScreen({
+    super.key,
+    required this.companyId,
+    this.bankAccountId,
+  });
 
   final int companyId;
+  final int? bankAccountId;
 
   @override
   ConsumerState<BankAccountFormScreen> createState() =>
@@ -21,6 +28,8 @@ class _BankAccountFormScreenState
     extends ConsumerState<BankAccountFormScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isFetching = false;
+  String? _fetchError;
 
   final _bankNameController = TextEditingController();
   final _bankAddressController = TextEditingController();
@@ -29,6 +38,41 @@ class _BankAccountFormScreenState
   final _swiftController = TextEditingController();
   String _currency = 'EUR';
   bool _isDefault = false;
+
+  bool get isEditing => widget.bankAccountId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEditing) _loadBankAccount();
+  }
+
+  Future<void> _loadBankAccount() async {
+    setState(() {
+      _isFetching = true;
+      _fetchError = null;
+    });
+    try {
+      final account = await ref
+          .read(bankAccountRepositoryProvider)
+          .getById(widget.bankAccountId!);
+      if (!mounted) return;
+      _bankNameController.text = account.bankName;
+      _bankAddressController.text = account.bankAddress;
+      _accountHolderController.text = account.accountHolder;
+      _ibanController.text = account.iban;
+      _swiftController.text = account.swift;
+      _currency = account.currency;
+      _isDefault = account.isDefault;
+      setState(() => _isFetching = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isFetching = false;
+        _fetchError = e.toString();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -55,13 +99,20 @@ class _BankAccountFormScreenState
     };
 
     try {
-      await ref
-          .read(bankAccountRepositoryProvider)
-          .create(widget.companyId, payload);
+      final repo = ref.read(bankAccountRepositoryProvider);
+      if (isEditing) {
+        await repo.update(widget.bankAccountId!, payload);
+      } else {
+        await repo.create(widget.companyId, payload);
+      }
       ref.invalidate(bankAccountListProvider(widget.companyId));
       if (mounted) {
         HapticFeedback.mediumImpact();
-        showSuccessSnackbar(context, 'Bank account created');
+        showSuccessSnackbar(
+            context,
+            isEditing
+                ? 'Bank account updated'
+                : 'Bank account created');
         context.pop();
       }
     } catch (e) {
@@ -73,9 +124,24 @@ class _BankAccountFormScreenState
 
   @override
   Widget build(BuildContext context) {
+    final title = isEditing ? 'Edit Bank Account' : 'New Bank Account';
+
+    if (_isFetching) {
+      return Scaffold(
+        appBar: AppBar(title: Text(title)),
+        body: const LoadingIndicator(),
+      );
+    }
+    if (_fetchError != null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(title)),
+        body: ErrorView(message: _fetchError!, onRetry: _loadBankAccount),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Bank Account'),
+        title: Text(title),
         actions: [
           IconButton(
             onPressed: _isLoading ? null : _save,

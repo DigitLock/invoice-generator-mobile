@@ -161,6 +161,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           companyId: int.parse(state.pathParameters['id']!),
         ),
       ),
+      GoRoute(
+        path: '/company/:companyId/bank-accounts/:accountId/edit',
+        builder: (context, state) => BankAccountFormScreen(
+          companyId: int.parse(state.pathParameters['companyId']!),
+          bankAccountId: int.parse(state.pathParameters['accountId']!),
+        ),
+      ),
     ],
   );
 });

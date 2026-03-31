@@ -17,6 +17,18 @@ class RemoteBankAccountRepository implements BankAccountRepository {
   }
 
   @override
+  Future<BankAccount> getById(int id) =>
+      throw UnimplementedError('Bank account detail is read-only in online mode');
+
+  @override
   Future<BankAccount> create(int companyId, Map<String, dynamic> data) =>
       throw UnimplementedError('Bank account creation is read-only in online mode');
+
+  @override
+  Future<BankAccount> update(int id, Map<String, dynamic> data) =>
+      throw UnimplementedError('Bank account editing is read-only in online mode');
+
+  @override
+  Future<void> delete(int id) =>
+      throw UnimplementedError('Bank account deletion is read-only in online mode');
 }

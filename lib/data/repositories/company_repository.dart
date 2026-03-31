@@ -5,4 +5,5 @@ abstract class CompanyRepository {
   Future<Company> getById(int id);
   Future<Company> create(Map<String, dynamic> data);
   Future<Company> update(int id, Map<String, dynamic> data);
+  Future<void> delete(int id);
 }

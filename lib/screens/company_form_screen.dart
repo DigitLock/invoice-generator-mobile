@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/company_repository.dart';
+import '../models/company.dart';
 import '../providers/company_provider.dart';
 import '../widgets/loading_indicator.dart';
 import '../widgets/error_view.dart';
@@ -21,7 +22,8 @@ class CompanyFormScreen extends ConsumerStatefulWidget {
 class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  bool _initialized = false;
+  bool _isFetching = false;
+  String? _fetchError;
 
   final _nameController = TextEditingController();
   final _contactPersonController = TextEditingController();
@@ -34,6 +36,37 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
   int get _editId => int.parse(widget.companyId!);
 
   @override
+  void initState() {
+    super.initState();
+    if (isEditing) _loadCompany();
+  }
+
+  Future<void> _loadCompany() async {
+    setState(() {
+      _isFetching = true;
+      _fetchError = null;
+    });
+    try {
+      final company =
+          await ref.read(companyRepositoryProvider).getById(_editId);
+      if (!mounted) return;
+      _nameController.text = company.name;
+      _contactPersonController.text = company.contactPerson;
+      _addressController.text = company.address;
+      _phoneController.text = company.phone ?? '';
+      _vatNumberController.text = company.vatNumber ?? '';
+      _regNumberController.text = company.regNumber ?? '';
+      setState(() => _isFetching = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isFetching = false;
+        _fetchError = e.toString();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _contactPersonController.dispose();
@@ -42,17 +75,6 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
     _vatNumberController.dispose();
     _regNumberController.dispose();
     super.dispose();
-  }
-
-  void _populateFrom(dynamic company) {
-    if (_initialized) return;
-    _initialized = true;
-    _nameController.text = company.name;
-    _contactPersonController.text = company.contactPerson ?? '';
-    _addressController.text = company.address;
-    _phoneController.text = company.phone ?? '';
-    _vatNumberController.text = company.vatNumber ?? '';
-    _regNumberController.text = company.regNumber ?? '';
   }
 
   Future<void> _save() async {
@@ -96,24 +118,16 @@ class _CompanyFormScreenState extends ConsumerState<CompanyFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (isEditing && !_initialized) {
-      final companyAsync = ref.watch(companyDetailProvider(_editId));
-      return companyAsync.when(
-        loading: () => Scaffold(
-          appBar: AppBar(title: const Text('Edit Company')),
-          body: const LoadingIndicator(),
-        ),
-        error: (e, _) => Scaffold(
-          appBar: AppBar(title: const Text('Edit Company')),
-          body: ErrorView(
-            message: e.toString(),
-            onRetry: () => ref.invalidate(companyDetailProvider(_editId)),
-          ),
-        ),
-        data: (company) {
-          _populateFrom(company);
-          return _buildForm();
-        },
+    if (_isFetching) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Company')),
+        body: const LoadingIndicator(),
+      );
+    }
+    if (_fetchError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Company')),
+        body: ErrorView(message: _fetchError!, onRetry: _loadCompany),
       );
     }
     return _buildForm();

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../data/invoice_repository.dart';
+import '../providers/app_mode_provider.dart';
 import '../models/company.dart';
 import '../models/client.dart';
 import '../models/bank_account.dart';
@@ -250,6 +251,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   }
 
   Widget _buildForm(BuildContext context) {
+    final isOffline = ref.watch(appModeProvider).mode == AppMode.offline;
     final companies = ref.watch(companyListProvider);
     final clients = ref.watch(clientListProvider('active'));
     final bankAccounts = _companyId != null
@@ -306,17 +308,18 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                         validator: (v) => v == null ? 'Required' : null,
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        tooltip: 'New Company',
-                        onPressed: () async {
-                          await context.push('/company/new');
-                          if (mounted) ref.invalidate(companyListProvider);
-                        },
+                    if (isOffline)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          tooltip: 'New Company',
+                          onPressed: () async {
+                            await context.push('/company/new');
+                            if (mounted) ref.invalidate(companyListProvider);
+                          },
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -384,21 +387,22 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                           validator: (v) => v == null ? 'Required' : null,
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: IconButton(
-                          icon: const Icon(Icons.add_circle_outline),
-                          tooltip: 'New Bank Account',
-                          onPressed: () async {
-                            await context.push(
-                                '/company/$_companyId/bank-accounts/new');
-                            if (mounted) {
-                              ref.invalidate(
-                                  bankAccountListProvider(_companyId!));
-                            }
-                          },
+                      if (isOffline)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: IconButton(
+                            icon: const Icon(Icons.add_circle_outline),
+                            tooltip: 'New Bank Account',
+                            onPressed: () async {
+                              await context.push(
+                                  '/company/$_companyId/bank-accounts/new');
+                              if (mounted) {
+                                ref.invalidate(
+                                    bankAccountListProvider(_companyId!));
+                              }
+                            },
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
