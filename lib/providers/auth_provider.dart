@@ -86,6 +86,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.unauthenticated,
         error: message,
       );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        status: AuthStatus.unauthenticated,
+        error: e.toString(),
+      );
     }
   }
 
@@ -121,7 +127,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         e.type == DioExceptionType.receiveTimeout) {
       return 'Connection timed out. Please try again.';
     }
-    return 'An unexpected error occurred. Please try again.';
+    if (e.type == DioExceptionType.connectionError) {
+      return 'Could not connect to server: ${e.message}';
+    }
+    if (e.response?.statusCode != null) {
+      return 'Server error ${e.response!.statusCode}: ${e.message}';
+    }
+    return 'Network error: ${e.type.name} — ${e.message}';
   }
 }
 

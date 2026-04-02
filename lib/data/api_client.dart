@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/server_config_provider.dart';
 
-const _fallbackApiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8081');
-const _fallbackAuthUrl = String.fromEnvironment('AUTH_URL', defaultValue: 'http://localhost:8080');
+const _fallbackApiUrl = String.fromEnvironment('API_URL', defaultValue: 'https://invoice.digitlock.systems');
+const _fallbackAuthUrl = String.fromEnvironment('AUTH_URL', defaultValue: 'https://api-demo-expensetracker.digitlock.systems');
 const tokenKey = 'jwt_token';
 
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {

@@ -37,6 +37,7 @@ class _ServerSettingsScreenState extends ConsumerState<ServerSettingsScreen> {
   bool _showForm = false;
   bool _isTesting = false;
   bool? _testResult;
+  String? _testError;
   String? _editingServerId;
 
   final _nameController = TextEditingController();
@@ -59,6 +60,7 @@ class _ServerSettingsScreenState extends ConsumerState<ServerSettingsScreen> {
     _apiUrlController.clear();
     _authUrlController.clear();
     _testResult = null;
+    _testError = null;
     _editingServerId = null;
     setState(() => _showForm = false);
   }
@@ -88,6 +90,7 @@ class _ServerSettingsScreenState extends ConsumerState<ServerSettingsScreen> {
     setState(() {
       _isTesting = true;
       _testResult = null;
+      _testError = null;
     });
 
     try {
@@ -97,8 +100,22 @@ class _ServerSettingsScreenState extends ConsumerState<ServerSettingsScreen> {
       ));
       final response = await dio.get('$url/health');
       setState(() => _testResult = response.statusCode == 200);
-    } catch (_) {
+    } on DioException catch (e) {
+      if (e.response != null) {
+        setState(() => _testError = 'Server returned ${e.response!.statusCode}');
+      } else if (e.type == DioExceptionType.connectionTimeout) {
+        setState(() => _testError = 'Connection timed out');
+      } else if (e.type == DioExceptionType.connectionError) {
+        setState(() => _testError = 'Could not connect');
+      } else {
+        setState(() => _testError = e.message ?? e.type.name);
+      }
       setState(() => _testResult = false);
+    } catch (e) {
+      setState(() {
+        _testResult = false;
+        _testError = e.toString();
+      });
     } finally {
       setState(() => _isTesting = false);
     }
@@ -340,12 +357,24 @@ class _ServerSettingsScreenState extends ConsumerState<ServerSettingsScreen> {
                       : const Text('Test'),
                 ),
                 const SizedBox(width: 8),
-                if (_testResult != null)
+                if (_testResult != null) ...[
                   Icon(
                     _testResult! ? Icons.check_circle : Icons.cancel,
                     color: _testResult! ? Colors.green : Colors.red,
                     size: 20,
                   ),
+                  if (!_testResult! && _testError != null) ...[
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        _testError!,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.red),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
                 const Spacer(),
                 TextButton(
                   onPressed: _resetForm,

@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 class AdPlaceholder extends StatelessWidget {
   const AdPlaceholder({super.key});
 
+  /// Set this to true once google_mobile_ads is integrated (Stage 4.6).
+  static const bool _adsEnabled = false;
+
   @override
   Widget build(BuildContext context) {
+    if (!_adsEnabled) return const SizedBox.shrink();
+
     return Container(
       height: 50,
       width: double.infinity,

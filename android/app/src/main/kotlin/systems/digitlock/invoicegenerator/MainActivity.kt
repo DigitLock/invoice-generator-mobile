@@ -1,4 +1,4 @@
-package systems.digitlock.invoice_generator_temp
+package systems.digitlock.invoicegenerator
 
 import io.flutter.embedding.android.FlutterActivity
 
